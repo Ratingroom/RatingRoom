@@ -1,5 +1,6 @@
 package com.example.ratingroom.ui.screens.profile
 
+import com.example.ratingroom.data.models.Review
 import com.example.ratingroom.data.remote.ReviewDto
 
 data class ProfileData(
@@ -17,5 +18,8 @@ data class ProfileUIState(
     val reviews: List<ReviewDto> = emptyList(),
     val isDarkMode: Boolean = false,
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val userReviews: List<Review> = emptyList(),
+    val reviewsCount: Int = 0,
+    val averageRating: Double = 0.0
 )
