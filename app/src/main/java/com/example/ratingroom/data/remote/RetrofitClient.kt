@@ -1,13 +1,12 @@
 package com.example.ratingroom.data.remote
 
+import com.example.ratingroom.Config.BASE_URL
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
-    // Emulador Android -> tu backend local
-    private const val BASE_URL = "http://10.0.2.2:3000/"
 
     private val logging = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
@@ -17,12 +16,16 @@ object RetrofitClient {
         .addInterceptor(logging)
         .build()
 
-    val api: ApiService by lazy {
+    private val retrofit: Retrofit by lazy {
         Retrofit.Builder()
-            .baseUrl(BASE_URL)
+            .baseUrl(BASE_URL)               // usa el de Config
             .client(http)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
-            .create(ApiService::class.java)
     }
+
+    fun <T> create(service: Class<T>): T = retrofit.create(service)
+
+    val api: ApiService by lazy { create(ApiService::class.java) }
+    val reviewApi: ReviewApi by lazy { create(ReviewApi::class.java) }
 }
