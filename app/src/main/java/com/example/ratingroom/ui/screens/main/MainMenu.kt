@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -15,7 +16,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.ratingroom.ui.utils.*
-import com.example.ratingroom.data.repository.MovieRepository
 import com.example.ratingroom.data.models.Movie
 import com.example.ratingroom.ui.theme.RatingRoomTheme
 
@@ -26,7 +26,7 @@ fun MainMenuScreen(
     viewModel: MainMenuViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    
+
     MainMenuScreenContent(
         uiState = uiState,
         onSearchQueryChange = viewModel::onSearchQueryChange,
@@ -46,30 +46,15 @@ fun MainMenuScreenContent(
     onMovieClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Obtener datos del repositorio
-    val genres = MovieRepository.getGenres()
-
-    // Filtrar películas basado en género y búsqueda
-    val filteredMovies = remember(uiState.selectedGenre, uiState.searchQuery) {
-        val moviesByGenre = MovieRepository.getMoviesByGenre(uiState.selectedGenre)
-        if (uiState.searchQuery.isBlank()) {
-            moviesByGenre
-        } else {
-            MovieRepository.searchMovies(uiState.searchQuery).filter { movie ->
-                uiState.selectedGenre == "Todos" || movie.genre == uiState.selectedGenre
-            }
-        }
-    }
-
     val cs = MaterialTheme.colorScheme
 
-    GradientBackground { // ✅ fondo azul degradado
+    GradientBackground {
         Column(
             modifier = modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Barra de búsqueda
+            // Búsqueda
             SearchBar(
                 query = uiState.searchQuery,
                 onQueryChange = onSearchQueryChange,
@@ -78,12 +63,12 @@ fun MainMenuScreenContent(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Filtros
+            // Filtros (usar géneros del estado)
             FilterDropdown(
                 expanded = uiState.filterExpanded,
                 onExpandedChange = onFilterExpandedChange,
                 selectedGenre = uiState.selectedGenre,
-                genres = genres,
+                genres = uiState.genres,      // ✅ viene del VM
                 onGenreSelected = onGenreSelected
             )
 
@@ -98,18 +83,51 @@ fun MainMenuScreenContent(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Grid de películas con LazyVerticalGrid
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxHeight()
-            ) {
-                items(filteredMovies) { movie ->
-                    MovieCard(
-                        movie = movie,
-                        onClick = { onMovieClick(movie.id) }
-                    )
+            when {
+                uiState.isLoading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+                uiState.errorMessage != null && uiState.filteredMovies.isEmpty() -> {
+                    // Mensaje claro cuando no hay nada que mostrar
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = uiState.errorMessage ?: "Sin datos",
+                            color = cs.onBackground
+                        )
+                    }
+                }
+                else -> {
+                    if (uiState.filteredMovies.isEmpty()) {
+                        // Caso raro: sin error pero vacío (señal visual)
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No hay películas para mostrar", color = cs.onBackground)
+                        }
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxHeight()
+                        ) {
+                            items(uiState.filteredMovies) { movie ->
+                                MovieCard(
+                                    movie = movie,
+                                    onClick = { onMovieClick(movie.id) }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -122,9 +140,40 @@ fun PreviewMainMenuScreen() {
     RatingRoomTheme {
         MainMenuScreenContent(
             uiState = MainMenuUIState(
+                isLoading = false,
+                movies = listOf(
+                    Movie(
+                        id = 1,
+                        title = "Titanic",
+                        year = "1997",
+                        genre = "Romance",
+                        rating = 4.5,
+                        reviews = 3876,
+                        description = "desc",
+                        director = "James Cameron",
+                        duration = "3h14",
+                        imageUrl = ""
+                    )
+                ),
+                filteredMovies = listOf(
+                    Movie(
+                        id = 1,
+                        title = "Titanic",
+                        year = "1997",
+                        genre = "Romance",
+                        rating = 4.5,
+                        reviews = 3876,
+                        description = "desc",
+                        director = "James Cameron",
+                        duration = "3h14",
+                        imageUrl = ""
+                    )
+                ),
                 searchQuery = "",
                 selectedGenre = "Todos",
-                filterExpanded = false
+                filterExpanded = false,
+                genres = listOf("Todos", "Romance", "Acción"),
+                errorMessage = null
             ),
             onSearchQueryChange = {},
             onGenreSelected = {},

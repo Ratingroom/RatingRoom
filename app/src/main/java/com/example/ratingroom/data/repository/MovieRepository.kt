@@ -1,174 +1,279 @@
 package com.example.ratingroom.data.repository
 
+import android.util.Log
 import com.example.ratingroom.data.models.Movie
 import com.example.ratingroom.data.models.Review
 import com.example.ratingroom.data.models.User
-import com.example.ratingroom.R
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.GET
+import retrofit2.http.Path
 
 object MovieRepository {
 
-    private val movies = listOf(
-        Movie(
-            id = 1,
-            title = "Titanic",
-            year = "1997",
-            genre = "Romance",
-            rating = 4.5,
-            reviews = 3876,
-            description = "Una épica historia de amor ambientada en el trágico viaje del Titanic.",
-            director = "James Cameron",
-            duration = "3h 14min",
-            imageUrl = "https://a.ltrbxd.com/resized/film-poster/5/1/5/2/4/51524-titanic-0-2000-0-3000-crop.jpg?v=7517ea94ce",
+    private const val TAG = "MovieRepo"
 
-        ),
-        Movie(
-            id = 2,
-            title = "Pulp Fiction",
-            year = "1994",
-            genre = "Crime",
-            rating = 4.9,
-            reviews = 3421,
-            description = "Historias entrelazadas de crimen en Los Ángeles.",
-            director = "Quentin Tarantino",
-            duration = "2h 34min",
-            imageUrl = "https://a.ltrbxd.com/resized/film-poster/5/1/4/4/4/51444-pulp-fiction-0-2000-0-3000-crop.jpg?v=dee19a8077"
+    // Cambia si corres en dispositivo físico
+    private const val BASE_URL = "http://10.0.2.2:3000/"
 
-        ),
-        Movie(
-            id = 3,
-            title = "The Dark Knight",
-            year = "2008",
-            genre = "Action",
-            rating = 4.8,
-            reviews = 2987,
-            description = "Batman enfrenta al Joker en Gotham City.",
-            director = "Christopher Nolan",
-            duration = "2h 32min",
-            imageUrl = "https://a.ltrbxd.com/resized/sm/upload/78/y5/zg/ej/oefdD26aey8GPdx7Rm45PNncJdU-0-2000-0-3000-crop.jpg?v=2d0ce4be25"
-        ),
-        Movie(
-            id = 4,
-            title = "Avatar",
-            year = "2009",
-            genre = "Sci-Fi",
-            rating = 4.4,
-            reviews = 2987,
-            description = "Un marine parapléjico es enviado a la luna Pandora.",
-            director = "James Cameron",
-            duration = "2h 42min",
-            imageUrl = "https://a.ltrbxd.com/resized/sm/upload/1p/mh/li/l2/b7nR3eKeTOwHPKmDLUWunIGasKo-0-2000-0-3000-crop.jpg?v=0bb5ec98ec"
-        ),
-        Movie(
-            id = 5,
-            title = "Jurassic Park",
-            year = "1993",
-            genre = "Adventure",
-            rating = 4.5,
-            reviews = 2654,
-            description = "Dinosaurios clonados en un parque temático.",
-            director = "Steven Spielberg",
-            duration = "2h 7min",
-            imageUrl = "https://a.ltrbxd.com/resized/sm/upload/1g/zz/ez/d8/yyCKYaW908ZbpexpnBJ3p8o87HA-0-2000-0-3000-crop.jpg?v=19a50874d0"
-        ),
-        Movie(
-            id = 6,
-            title = "Goodfellas",
-            year = "1990",
-            genre = "Crime",
-            rating = 4.8,
-            reviews = 2234,
-            description = "La historia de Henry Hill y la mafia italiana.",
-            director = "Martin Scorsese",
-            duration = "2h 26min",
-            imageUrl = "https://a.ltrbxd.com/resized/film-poster/5/1/3/8/3/51383-goodfellas-0-2000-0-3000-crop.jpg?v=c6c265f228"
-        ),
-        Movie(
-            id = 7,
-            title = "Inception",
-            year = "2010",
-            genre = "Sci-Fi",
-            rating = 4.7,
-            reviews = 4521,
-            description = "Un ladrón que roba secretos del subconsciente.",
-            director = "Christopher Nolan",
-            duration = "2h 28min",
-            imageUrl = "https://a.ltrbxd.com/resized/sm/upload/sv/95/s9/4j/inception-0-2000-0-3000-crop.jpg?v=30d7224316"
-        ),
-        Movie(
-            id = 8,
-            title = "The Shawshank Redemption",
-            year = "1994",
-            genre = "Drama",
-            rating = 4.9,
-            reviews = 5432,
-            description = "La amistad entre dos prisioneros a lo largo de los años.",
-            director = "Frank Darabont",
-            duration = "2h 22min",
-            imageUrl = "https://a.ltrbxd.com/resized/sm/upload/7l/hn/46/uz/zGINvGjdlO6TJRu9wESQvWlOKVT-0-2000-0-3000-crop.jpg?v=8736d1c395"
-        )
-    )
+    private interface ApiService {
+        @GET("api/peliculas")
+        suspend fun getPeliculasRaw(): JsonElement
 
-    private val users = listOf(
-        User(
-            id = 1,
-            displayName = "Juan Pérez",
-            email = "juan@example.com",
-            biography = "Amante del cine clásico y moderno",
-            location = "Madrid, España",
-            favoriteGenre = "Sci-Fi"
-        )
-    )
+        @GET("api/peliculas/{id}")
+        suspend fun getPeliculaRaw(@Path("id") id: Int): JsonElement
 
-    private val reviews = listOf(
-        Review(
-            id = 1,
-            movieId = 1,
-            userId = 1,
-            rating = 4.5,
-            comment = "Una película increíble con efectos visuales impresionantes.",
-            date = "2024-01-15"
-        ),
-        Review(
-            id = 2,
-            movieId = 2,
-            userId = 1,
-            rating = 5.0,
-            comment = "Obra maestra del cine. Tarantino en su mejor momento.",
-            date = "2024-01-10"
-        )
-    )
+        @GET("api/peliculas/{id}/reviews")
+        suspend fun getReviewsRaw(@Path("id") id: Int): JsonElement
 
-    fun getAllMovies(): List<Movie> = movies
-
-    fun getMoviesByGenre(genre: String): List<Movie> {
-        return if (genre == "Todos") movies else movies.filter { it.genre == genre }
+        @GET("api/usuarios/{id}")
+        suspend fun getUsuarioRaw(@Path("id") id: Int): JsonElement
     }
 
-    fun searchMovies(query: String): List<Movie> {
-        return movies.filter {
-            it.title.contains(query, ignoreCase = true) ||
-                    it.director.contains(query, ignoreCase = true) ||
-                    it.genre.contains(query, ignoreCase = true)
+    private val api: ApiService by lazy {
+        Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(ApiService::class.java)
+    }
+
+    // ---------- helpers de navegación segura del JSON ----------
+    private fun JsonElement.asJsonObjectOrNull(): JsonObject? =
+        if (this != null && this.isJsonObject) this.asJsonObject else null
+
+    private fun JsonElement.asJsonArrayOrNull(): JsonArray? =
+        if (this != null && this.isJsonArray) this.asJsonArray else null
+
+    private fun JsonObject.safeString(name: String): String? =
+        if (has(name) && get(name).isJsonPrimitive) get(name).asString else null
+
+    private fun JsonObject.safeDouble(name: String): Double? =
+        safeString(name)?.toDoubleOrNull()
+
+    private fun JsonObject.safeInt(name: String): Int? =
+        try {
+            when {
+                has(name) && get(name).isJsonPrimitive -> get(name).asInt
+                else -> null
+            }
+        } catch (e: Exception) {
+            null
+        }
+
+    // Dado un root JsonElement intenta extraer un JsonArray por varias rutas comunes:
+    // - Si root es array -> devuelve root
+    // - Si root is object -> busca data, data.peliculas, peliculas, rows, results, items
+    // - Si paths se pasan (ej. "data","rows") intenta navegar en ese orden y devolver resultado
+    private fun asArrayFlexible(root: JsonElement?, vararg paths: String): JsonArray {
+        if (root == null) return JsonArray()
+
+        // caso raíz array
+        root.asJsonArrayOrNull()?.let { return it }
+
+        val obj = root.asJsonObjectOrNull() ?: JsonObject()
+
+        // si el usuario pasó una ruta específica (ej "data","peliculas"), navega por ella
+        if (paths.isNotEmpty()) {
+            var current: JsonElement? = obj
+            for (p in paths) {
+                current = (current?.asJsonObjectOrNull())?.let { o -> if (o.has(p)) o.get(p) else null }
+            }
+            current?.asJsonArrayOrNull()?.let { return it }
+            // si llegó a un objeto con "peliculas" dentro, probar
+            current?.asJsonObjectOrNull()?.let { co ->
+                if (co.has("peliculas")) co.getAsJsonArray("peliculas")?.let { return it }
+            }
+        }
+
+        // candidatos comunes
+        val candidates = listOf("data", "peliculas", "results", "rows", "items")
+            .mapNotNull { key -> if (obj.has(key)) obj.get(key) else null }
+
+        for (cand in candidates) {
+            // si candidato es array, devuelve
+            cand.asJsonArrayOrNull()?.let { return it }
+            // si candidato es objeto y tiene "peliculas" u "items" dentro, intenta esas rutas
+            cand.asJsonObjectOrNull()?.let { co ->
+                if (co.has("peliculas")) {
+                    co.getAsJsonArray("peliculas")?.let { return it }
+                }
+                if (co.has("rows")) co.getAsJsonArray("rows")?.let { return it }
+                if (co.has("items")) co.getAsJsonArray("items")?.let { return it }
+                if (co.has("data")) co.getAsJsonArray("data")?.let { return it }
+            }
+        }
+
+        // nothing -> retornar array vacío para evitar crashes
+        return JsonArray()
+    }
+
+    // Extrae un objeto de formas comunes: {...} | { data: {...} } | [ {...} ]
+    private fun asObjectFlexible(root: JsonElement?): JsonObject {
+        if (root == null) return JsonObject()
+        root.asJsonObjectOrNull()?.let { o ->
+            // si viene envuelto en data o item
+            o.safeString("dummy") // (no-op) solo para claridad
+            return when {
+                o.has("data") -> asObjectFlexible(o.get("data"))
+                o.has("item") -> asObjectFlexible(o.get("item"))
+                o.has("pelicula") -> asObjectFlexible(o.get("pelicula"))
+                else -> o
+            }
+        }
+        root.asJsonArrayOrNull()?.let { arr ->
+            if (arr.size() > 0) return asObjectFlexible(arr[0])
+        }
+        return JsonObject()
+    }
+
+    // ---------- mappers ----------
+    private fun mapMovie(obj: JsonObject): Movie {
+        val id = obj.safeInt("id") ?: 0
+        val titulo = obj.safeString("titulo") ?: obj.safeString("title") ?: ""
+        val descripcion = obj.safeString("descripcion") ?: obj.safeString("description") ?: ""
+        val fecha = obj.safeString("fechaSalida") ?: obj.safeString("fecha") ?: ""
+        val subcat = obj.safeString("subcategoria") ?: obj.safeString("subCategory") ?: "Sin categoría"
+        val portada = obj.safeString("portada") ?: obj.safeString("imageUrl")
+        val avg = obj.safeDouble("averageRating") ?: obj.safeDouble("rating") ?: 0.0
+        val totalReviews = obj.safeInt("totalReviews") ?: obj.safeInt("reviews") ?: 0
+
+        return Movie(
+            id = id,
+            title = titulo,
+            year = fecha,
+            genre = subcat,
+            rating = avg,
+            reviews = totalReviews,
+            description = descripcion,
+            director = "", // no viene del backend por ahora
+            duration = "",
+            imageUrl = portada
+        )
+    }
+
+    private fun mapReview(obj: JsonObject): Review {
+        return Review(
+            id = obj.safeInt("id") ?: 0,
+            movieId = obj.safeInt("pelicula_id") ?: obj.safeInt("peliculaId") ?: 0,
+            userId = obj.safeInt("usuario_id") ?: obj.safeInt("userId") ?: 0,
+            rating = (obj.safeDouble("rating") ?: obj.safeDouble("valor") ?: 0.0),
+            comment = obj.safeString("texto") ?: obj.safeString("comment") ?: "",
+            date = obj.safeString("createdAt") ?: ""
+        )
+    }
+
+    private fun mapUser(obj: JsonObject): User {
+        return User(
+            id = obj.safeInt("id") ?: 0,
+            displayName = obj.safeString("username") ?: obj.safeString("displayName") ?: "",
+            email = obj.safeString("email") ?: "",
+            biography = "",
+            location = "",
+            favoriteGenre = ""
+        )
+    }
+
+    // ---------- API público (suspend) ----------
+
+    /**
+     * Devuelve lista de películas.
+     * Soporta respuestas:
+     *  - [ {...}, {...} ]
+     *  - { data: { peliculas: [ ... ] } }
+     *  - { data: [ ... ] }
+     *  - { peliculas: [ ... ] }
+     */
+    suspend fun getAllMovies(): List<Movie> = withContext(Dispatchers.IO) {
+        val root = try {
+            api.getPeliculasRaw()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error llamando API /api/peliculas: ${e.message}", e)
+            return@withContext emptyList()
+        }
+
+        // Primero intenta rutas comunes (data -> peliculas)
+        val arr = asArrayFlexible(root, "data", "peliculas")
+        val effective = if (arr.size() == 0) asArrayFlexible(root) else arr
+
+        if (effective.size() == 0) {
+            // debug: imprime exacto JSON que vino para que lo revises en Logcat
+            Log.e(TAG, "Respuesta inesperada de /api/peliculas: $root")
+        }
+
+        return@withContext effective.mapNotNull { el ->
+            el.asJsonObjectOrNull()?.let { mapMovie(it) }
         }
     }
 
-    fun getMovieById(id: Int): Movie? = movies.find { it.id == id }
-
-    fun getGenres(): List<String> = listOf("Todos", "Romance", "Crime", "Action", "Sci-Fi", "Adventure", "Drama")
-
-    fun getUserById(id: Int): User? = users.find { it.id == id }
-
-    fun getReviewsForMovie(movieId: Int): List<Review> = reviews.filter { it.movieId == movieId }
-
-    fun getWatchLaterMovies(): List<Movie> {
-        return movies.take(2)
+    suspend fun getMoviesByGenre(genre: String): List<Movie> {
+        val all = getAllMovies()
+        return if (genre == "Todos") all else all.filter { it.genre.equals(genre, ignoreCase = true) }
     }
 
-    fun getFavoriteMovies(): List<Movie> {
-        return movies.filter { it.rating >= 4.7 }
+    suspend fun searchMovies(query: String): List<Movie> {
+        val q = query.trim()
+        if (q.isEmpty()) return getAllMovies()
+        return getAllMovies().filter {
+            it.title.contains(q, ignoreCase = true) ||
+                    it.description.contains(q, ignoreCase = true) ||
+                    it.genre.contains(q, ignoreCase = true)
+        }
     }
 
-    fun getWatchedMovies(): List<Movie> {
-        return movies.takeLast(3)
+    suspend fun getMovieById(id: Int): Movie? = withContext(Dispatchers.IO) {
+        val root = try {
+            api.getPeliculaRaw(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error /api/peliculas/$id: ${e.message}", e)
+            return@withContext null
+        }
+        val obj = asObjectFlexible(root)
+        return@withContext try {
+            mapMovie(obj)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error mapeando detalle: ${e.message}", e)
+            null
+        }
     }
+
+    suspend fun getGenres(): List<String> = withContext(Dispatchers.IO) {
+        val movies = getAllMovies()
+        listOf("Todos") + movies.mapNotNull { it.genre.takeIf { g -> g.isNotBlank() } }.distinct()
+    }
+
+    suspend fun getUserById(id: Int): User? = withContext(Dispatchers.IO) {
+        val root = try {
+            api.getUsuarioRaw(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error /api/usuarios/$id: ${e.message}", e)
+            return@withContext null
+        }
+        val obj = asObjectFlexible(root)
+        return@withContext try { mapUser(obj) } catch (e: Exception) { null }
+    }
+
+    suspend fun getReviewsForMovie(movieId: Int): List<Review> = withContext(Dispatchers.IO) {
+        val root = try {
+            api.getReviewsRaw(movieId)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error /api/peliculas/$movieId/reviews: ${e.message}", e)
+            return@withContext emptyList()
+        }
+
+        val arr = asArrayFlexible(root, "data", "rows")
+        val effective = if (arr.size() == 0) asArrayFlexible(root) else arr
+
+        return@withContext effective.mapNotNull { it.asJsonObjectOrNull()?.let(::mapReview) }
+    }
+
+    // helpers UI
+    suspend fun getWatchLaterMovies(): List<Movie> = getAllMovies().take(2)
+    suspend fun getFavoriteMovies(): List<Movie> = getAllMovies().filter { it.rating >= 4.7 }
+    suspend fun getWatchedMovies(): List<Movie> = getAllMovies().takeLast(3)
 }
