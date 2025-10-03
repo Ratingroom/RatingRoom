@@ -2,16 +2,17 @@ package com.example.ratingroom.data.repository
 
 import com.example.ratingroom.data.datasource.AuthRemoteDataSource
 import com.example.ratingroom.data.datasource.FirestoreDataSource
+import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuthActionCodeException
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
-
-data class AuthResult(
-    val isSuccess: Boolean,
-    val user: FirebaseUser? = null,
-    val errorMessage: String? = null
-)
 
 data class UserProfile(
     val uid: String,
@@ -36,68 +37,38 @@ class AuthRepository @Inject constructor(
 
     val currentUser: FirebaseUser? get() = authRemoteDataSource.currentUser
 
-    suspend fun signIn(email: String, password: String): AuthResult {
-        return try {
-            val user = authRemoteDataSource.signIn(email, password)
-            AuthResult(
-                isSuccess = user != null,
-                user = user
-            )
-        } catch (e: FirebaseAuthActionCodeException){
-            AuthResult(
-                isSuccess = false,
-                errorMessage = "contrasena invalida" ?: "Error de autenticación"
-            )
-        }
-        catch (e: Exception) {
-            AuthResult(
-                isSuccess = false,
-                errorMessage = e.message ?: "Error de autenticación"
-            )
-        }
+    // ---------- Sign In ----------
+    suspend fun signIn(email: String, password: String): Result<FirebaseUser> {
+        return runCatching {
+            authRemoteDataSource.signIn(email, password)
+                ?: error("No se pudo iniciar sesión.")
+        }.mapErrorAuth()
     }
 
+    // ---------- Sign Up ----------
     suspend fun signUp(
         email: String,
         password: String,
         displayName: String? = null
-    ): AuthResult {
-        return try {
-            println("AuthRepository: Iniciando registro para email: $email")
+    ): Result<FirebaseUser> {
+        return runCatching {
             val user = authRemoteDataSource.signUp(
                 email = email,
                 password = password,
                 displayName = displayName
             )
-            println("AuthRepository: Usuario registrado: ${user?.uid}")
-            val result = AuthResult(
-                isSuccess = user != null,
-                user = user
-            )
-            println("AuthRepository: Resultado isSuccess: ${result.isSuccess}")
-            result
-        } catch (e: Exception) {
-            println("AuthRepository: Error en registro: ${e.message}")
-            e.printStackTrace()
-            AuthResult(
-                isSuccess = false,
-                errorMessage = e.message ?: "Error al crear cuenta"
-            )
-        }
+            user ?: error("No se pudo crear la cuenta.")
+        }.mapErrorAuth()
     }
 
-    suspend fun sendPasswordResetEmail(email: String): AuthResult {
-        return try {
+    // ---------- Password Reset ----------
+    suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
+        return runCatching {
             authRemoteDataSource.sendPasswordResetEmail(email)
-            AuthResult(isSuccess = true)
-        } catch (e: Exception) {
-            AuthResult(
-                isSuccess = false,
-                errorMessage = e.message ?: "Error al enviar email de recuperación"
-            )
-        }
+        }.mapErrorAuth()
     }
 
+    // ---------- Update Profile (Auth + Firestore) ----------
     suspend fun updateUserProfile(
         displayName: String? = null,
         email: String? = null,
@@ -107,13 +78,13 @@ class AuthRepository @Inject constructor(
         birthdate: String? = null,
         website: String? = null,
         profileImageUrl: String? = null
-    ): AuthResult {
-        return try {
-            // Actualizar en Firebase Auth si es necesario
+    ): Result<Unit> {
+        return runCatching {
+            // Cambios en Firebase Auth si aplica
             displayName?.let { authRemoteDataSource.updateDisplayName(it) }
             email?.let { authRemoteDataSource.updateUserEmail(it) }
-            
-            // Actualizar en Firestore
+
+            // Cambios en Firestore
             firestoreDataSource.updateUserProfile(
                 displayName = displayName,
                 email = email,
@@ -124,28 +95,17 @@ class AuthRepository @Inject constructor(
                 website = website,
                 profileImageUrl = profileImageUrl
             )
-            AuthResult(isSuccess = true)
-        } catch (e: Exception) {
-            AuthResult(
-                isSuccess = false,
-                errorMessage = e.message ?: "Error al actualizar perfil"
-            )
-        }
+        }.mapErrorAuth()
     }
 
-    suspend fun getUserProfile(): UserProfile? {
-        return try {
-            println("AuthRepository.getUserProfile: Iniciando obtención de perfil")
-            val user = currentUser ?: return null
-            println("AuthRepository.getUserProfile: Usuario autenticado: ${user.uid}")
-            
+    // ---------- Perfil ----------
+    suspend fun getUserProfile(): Result<UserProfile> {
+        return runCatching {
+            val user = currentUser ?: error("No hay usuario autenticado.")
             val profileData = firestoreDataSource.getUserProfile()
-            println("AuthRepository.getUserProfile: Datos recibidos de FirestoreDataSource: ${profileData != null}")
-            
+
             if (profileData != null) {
                 val profileImageUrl = profileData["profileImageUrl"] as? String
-                println("AuthRepository.getUserProfile: profileImageUrl recuperado: $profileImageUrl")
-                
                 UserProfile(
                     uid = user.uid,
                     email = user.email ?: "",
@@ -159,25 +119,18 @@ class AuthRepository @Inject constructor(
                     profileImageUrl = profileImageUrl,
                     createdAt = profileData["createdAt"] as? Long,
                     updatedAt = profileData["updatedAt"] as? Long
-                ).also {
-                    println("AuthRepository.getUserProfile: Perfil creado con profileImageUrl: ${it.profileImageUrl}")
-                }
+                )
             } else {
-                // Si no hay datos en Firestore, crear perfil básico
-                println("AuthRepository.getUserProfile: No hay datos en Firestore, creando perfil básico")
                 UserProfile(
                     uid = user.uid,
                     email = user.email ?: "",
                     fullName = user.displayName
                 )
             }
-        } catch (e: Exception) {
-            println("AuthRepository.getUserProfile: ERROR al obtener perfil: ${e.message}")
-            e.printStackTrace()
-            null
-        }
+        }.mapErrorAuth()
     }
 
+    // ---------- Utilidades ----------
     fun signOut() {
         authRemoteDataSource.signOut()
     }
@@ -185,4 +138,32 @@ class AuthRepository @Inject constructor(
     fun isUserLoggedIn(): Boolean {
         return authRemoteDataSource.isUserLoggedIn()
     }
+}
+
+/** Mapea excepciones de Auth/Network a mensajes específicos dentro de Result */
+private fun <T> Result<T>.mapErrorAuth(): Result<T> {
+    return fold(
+        onSuccess = { Result.success(it) },
+        onFailure = { t ->
+            when (t) {
+                is CancellationException -> throw t
+                is FirebaseAuthInvalidCredentialsException ->
+                    Result.failure(IllegalStateException("Credenciales inválidas. Verifica tu email o contraseña."))
+                is FirebaseAuthInvalidUserException ->
+                    Result.failure(IllegalStateException("El usuario no existe o fue deshabilitado."))
+                is FirebaseAuthUserCollisionException ->
+                    Result.failure(IllegalStateException("El email ya está en uso."))
+                is FirebaseAuthWeakPasswordException ->
+                    Result.failure(IllegalStateException("La contraseña es demasiado débil."))
+                is FirebaseAuthRecentLoginRequiredException ->
+                    Result.failure(IllegalStateException("Por seguridad, vuelve a iniciar sesión para continuar."))
+                is FirebaseAuthActionCodeException ->
+                    Result.failure(IllegalStateException("Código inválido o expirado."))
+                is FirebaseNetworkException ->
+                    Result.failure(IllegalStateException("Sin conexión. Intenta de nuevo."))
+                else ->
+                    Result.failure(IllegalStateException(t.message ?: "Error inesperado."))
+            }
+        }
+    )
 }
