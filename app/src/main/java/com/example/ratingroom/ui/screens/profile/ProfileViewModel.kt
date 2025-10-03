@@ -4,6 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ratingroom.data.models.Review
 import com.example.ratingroom.data.repository.AuthRepository
+import com.example.ratingroom.Config.CURRENT_USER_ID
+import com.example.ratingroom.data.remote.UserProfileDto
+import com.example.ratingroom.data.remote.RetrofitClient
+import com.example.ratingroom.data.repository.ReviewRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,10 +18,11 @@ import kotlinx.coroutines.delay
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
-    private val authRepository: AuthRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ProfileUIState())
+    private val repo = ReviewRepository(RetrofitClient.reviewApi)
+
+    private val _uiState = MutableStateFlow(ProfileUIState(isLoading = true))
     val uiState: StateFlow<ProfileUIState> = _uiState.asStateFlow()
 
     // ID del usuario actual (quemado como en los requisitos)
@@ -27,30 +32,16 @@ class ProfileViewModel @Inject constructor(
         loadProfile()
     }
 
-    private fun loadProfile() {
+    fun loadProfile(userId: Int = CURRENT_USER_ID) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            println("ProfileViewModel.loadProfile: Iniciando carga de perfil")
-
-            authRepository.getUserProfile()
-                .onSuccess { userProfile ->
-                    println("ProfileViewModel.loadProfile: Perfil cargado con éxito")
-                    println("ProfileViewModel.loadProfile: profileImageUrl: ${userProfile.profileImageUrl}")
-
-                    val imageUrl = userProfile.profileImageUrl?.takeIf { it.isNotEmpty() }
-                    val profileData = ProfileData(
-                        name = userProfile.fullName ?: "Usuario",
-                        email = userProfile.email,
-                        memberSince = "Enero 2024", // TODO: calcular desde createdAt si aplica
-                        favoriteGenre = userProfile.favoriteGenre ?: "No especificado",
-                        reviewsCount = 0,           // TODO: origen real
-                        averageRating = 0.0,        // TODO: origen real
-                        profileImageUrl = imageUrl
-                    )
-
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            runCatching { repo.getUserProfile(userId) }
+                .onSuccess { prof ->
+                    val reviews = prof?.reviews ?: emptyList()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        profileData = profileData
+                        profileData = prof?.toProfileData(),
+                        reviews = reviews
                     )
                     println("ProfileViewModel.loadProfile: Estado actualizado con profileImageUrl: ${_uiState.value.profileData?.profileImageUrl}")
                     
@@ -58,7 +49,6 @@ class ProfileViewModel @Inject constructor(
                     loadUserReviews()
                 }
                 .onFailure { e ->
-                    println("ProfileViewModel.loadProfile: ERROR al cargar perfil: ${e.message}")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = e.message ?: "Error al cargar perfil"
@@ -126,6 +116,54 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    fun createReview(articuloId: Int, rating: Int, texto: String) {
+        viewModelScope.launch {
+            runCatching { repo.create(CURRENT_USER_ID, articuloId, rating, texto) }
+                .onSuccess { created ->
+                    if (created != null) {
+                        _uiState.value = _uiState.value.copy(
+                            reviews = listOf(created) + _uiState.value.reviews
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(errorMessage = e.message)
+                }
+        }
+    }
+
+    fun updateReview(reviewId: Int, rating: Int, texto: String) {
+        viewModelScope.launch {
+            runCatching { repo.update(CURRENT_USER_ID, reviewId, rating, texto) }
+                .onSuccess { updated ->
+                    if (updated != null) {
+                        _uiState.value = _uiState.value.copy(
+                            reviews = _uiState.value.reviews.map { if (it.id == reviewId) updated else it }
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(errorMessage = e.message)
+                }
+        }
+    }
+
+    fun deleteReview(reviewId: Int) {
+        viewModelScope.launch {
+            runCatching { repo.delete(CURRENT_USER_ID, reviewId) }
+                .onSuccess { ok ->
+                    if (ok) {
+                        _uiState.value = _uiState.value.copy(
+                            reviews = _uiState.value.reviews.filterNot { it.id == reviewId }
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(errorMessage = e.message)
+                }
+        }
+    }
+
     fun onDarkModeChange(isDarkMode: Boolean) {
         _uiState.value = _uiState.value.copy(isDarkMode = isDarkMode)
     }
@@ -134,13 +172,14 @@ class ProfileViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
 
-    fun refreshProfile() {
-        println("ProfileViewModel.refreshProfile: Refrescando perfil")
-        loadProfile()
-    }
-
-    fun logout() {
-        println("ProfileViewModel.logout: Cerrando sesión")
-        authRepository.signOut()
-    }
+    // Mapper del DTO del backend a datos de UI
+    private fun UserProfileDto.toProfileData() = ProfileData(
+        name = nombre ?: usuario,
+        email = email,
+        memberSince = null,
+        favoriteGenre = null,
+        reviewsCount = reviews.size,
+        averageRating = reviews.map { it.rating }.average().takeIf { !it.isNaN() } ?: 0.0,
+        profileImageUrl = fotoPerfil
+    )
 }
