@@ -16,6 +16,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.ratingroom.data.models.Review
 import com.example.ratingroom.ui.theme.RatingRoomTheme
 import com.example.ratingroom.ui.utils.*
 
@@ -116,7 +117,10 @@ fun ProfileScreenContent(
 
                     Spacer(Modifier.height(12.dp))
 
-                    RecentReviews(colorScheme = cs)
+                    RecentReviews(
+                        colorScheme = cs,
+                        reviews = uiState.userReviews
+                    )
                     Spacer(Modifier.height(12.dp))
                 }
             }
@@ -136,7 +140,6 @@ fun ProfileHeader(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             println("ProfileHeader: Mostrando perfil con nombre: ${profileData.name}, imageUrl: ${profileData.profileImageUrl}")
-            // Asegurarse de que la URL de la imagen no sea nula o vacía antes de pasarla al componente
             val imageUrl = profileData.profileImageUrl
             println("ProfileHeader: URL de imagen a mostrar: $imageUrl")
             AvatarInitials(
@@ -238,29 +241,30 @@ fun ProfileSettings(
 @Composable
 fun RecentReviews(
     colorScheme: ColorScheme,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    reviews: List<Review> = emptyList()
 ) {
     SectionCard(title = "Mis Reseñas Recientes") {
-        ReviewCard(
-            title = "Inception",
-            rating = 5,
-            excerpt = "Una película increíble que te hace pensar. Los efectos visuales son espectaculares y la historia es muy original.",
-            timeAgo = "Hace 3 días"
-        )
-        HorizontalDivider()
-        ReviewCard(
-            title = "The Matrix",
-            rating = 4,
-            excerpt = "Clásico de la ciencia ficción. Revolucionó el género y sigue vigente.",
-            timeAgo = "Hace 1 semana"
-        )
-        HorizontalDivider()
-        ReviewCard(
-            title = "Interstellar",
-            rating = 5,
-            excerpt = "Obra maestra: ciencia, emoción e imágenes se combinan perfectamente.",
-            timeAgo = "Hace 2 semanas"
-        )
+        if (reviews.isEmpty()) {
+            Text(
+                text = "No has realizado ninguna reseña todavía",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 16.dp)
+            )
+        } else {
+            reviews.forEachIndexed { index, review ->
+                ReviewCard(
+                    title = "Película #${review.movieId}", 
+                    rating = review.rating.toInt(),
+                    excerpt = review.comment,
+                    timeAgo = review.date
+                )
+                if (index < reviews.size - 1) {
+                    HorizontalDivider()
+                }
+            }
+        }
     }
 }
 
@@ -289,3 +293,4 @@ fun ProfileScreenPreview() {
         )
     }
 }
+
