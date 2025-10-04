@@ -2,16 +2,22 @@ package com.example.ratingroom.ui.screens.reviews
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.ratingroom.data.remote.RetrofitClient
+import com.example.ratingroom.data.repository.MovieRepository
+import com.example.ratingroom.data.repository.ReviewRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 
 @HiltViewModel
 class ReviewsViewModel @Inject constructor() : ViewModel() {
+    
+    // ID de usuario quemado para obtener datos de REST API
+    private val HARDCODED_USER_ID = 2
+    private val reviewRepo = ReviewRepository(RetrofitClient.reviewApi)
     
     private val _uiState = MutableStateFlow(ReviewsUIState())
     val uiState: StateFlow<ReviewsUIState> = _uiState.asStateFlow()
@@ -25,31 +31,62 @@ class ReviewsViewModel @Inject constructor() : ViewModel() {
             _uiState.value = _uiState.value.copy(isLoading = true)
             
             try {
-                delay(1000) // Simular carga
+                println("ReviewsViewModel: Iniciando carga de reseñas para usuario $HARDCODED_USER_ID")
                 
-                val reviews = listOf(
-                    ReviewItem(
-                        movieTitle = "Avengers: Endgame",
-                        rating = 5,
-                        comment = "Una película épica que cierra perfectamente la saga."
-                    ),
-                    ReviewItem(
-                        movieTitle = "The Dark Knight",
-                        rating = 5,
-                        comment = "Obra maestra del cine de superhéroes."
-                    ),
-                    ReviewItem(
-                        movieTitle = "Inception",
-                        rating = 4,
-                        comment = "Compleja pero brillante. Nolan en su mejor forma."
-                    )
-                )
+                // Obtener reseñas reales del usuario desde el backend
+                val userReviews = reviewRepo.listByUser(HARDCODED_USER_ID)
+                println("ReviewsViewModel: Reseñas obtenidas del backend: ${userReviews.size}")
+                userReviews.forEach { review ->
+                    println("ReviewsViewModel: Review ID=${review.id}, Rating=${review.rating}, PeliculaID=${review.pelicula_id}")
+                }
+                
+                // Mapear las reseñas del backend a ReviewItem para la UI
+                val reviews = mutableListOf<ReviewItem>()
+                
+                for (reviewDto in userReviews) {
+                    try {
+                        // Obtener información de la película (función suspend)
+                        val movie = MovieRepository.getMovieById(reviewDto.pelicula_id)
+                        println("ReviewsViewModel: Película obtenida para ID ${reviewDto.pelicula_id}: ${movie?.title}")
+                        
+                        // Siempre agregar la reseña, incluso si no se encuentra la película
+                        reviews.add(
+                            ReviewItem(
+                                id = reviewDto.id,
+                                movieId = reviewDto.pelicula_id,
+                                movieTitle = movie?.title ?: "Película desconocida (ID: ${reviewDto.pelicula_id})",
+                                rating = reviewDto.rating,
+                                comment = reviewDto.texto
+                            )
+                        )
+                        println("ReviewsViewModel: ReviewItem agregado - Título: ${movie?.title ?: "Película ID ${reviewDto.pelicula_id}"}")
+                    } catch (e: Exception) {
+                        println("ReviewsViewModel: Error obteniendo película ID ${reviewDto.pelicula_id}: ${e.message}")
+                        // Agregar la reseña con título genérico si hay error
+                        reviews.add(
+                            ReviewItem(
+                                id = reviewDto.id,
+                                movieId = reviewDto.pelicula_id,
+                                movieTitle = "Película ID ${reviewDto.pelicula_id}",
+                                rating = reviewDto.rating,
+                                comment = reviewDto.texto
+                            )
+                        )
+                        println("ReviewsViewModel: ReviewItem agregado con título genérico")
+                    }
+                }
+                
+                println("ReviewsViewModel: Total de ReviewItems creados: ${reviews.size}")
                 
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     reviews = reviews
                 )
+                
+                println("ReviewsViewModel: Estado actualizado - isLoading=false, reviews.size=${reviews.size}")
             } catch (e: Exception) {
+                println("ReviewsViewModel: Error al cargar reseñas: ${e.message}")
+                e.printStackTrace()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     errorMessage = e.message
@@ -58,15 +95,36 @@ class ReviewsViewModel @Inject constructor() : ViewModel() {
         }
     }
     
-    fun editReview(review: ReviewItem) {
-        // Implementar edición de reseña
-    }
-    
-    fun deleteReview(review: ReviewItem) {
+    fun editReview(reviewId: Int, rating: Int, texto: String) {
         viewModelScope.launch {
             try {
-                val updatedReviews = _uiState.value.reviews.filter { it != review }
-                _uiState.value = _uiState.value.copy(reviews = updatedReviews)
+                val updated = reviewRepo.update(HARDCODED_USER_ID, reviewId, rating, texto)
+                if (updated != null) {
+                    // Actualizar la reseña en la lista local
+                    val updatedReviews = _uiState.value.reviews.map { review ->
+                        if (review.id == reviewId) {
+                            review.copy(rating = updated.rating, comment = updated.texto)
+                        } else {
+                            review
+                        }
+                    }
+                    _uiState.value = _uiState.value.copy(reviews = updatedReviews)
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
+            }
+        }
+    }
+    
+    fun deleteReview(reviewId: Int) {
+        viewModelScope.launch {
+            try {
+                val success = reviewRepo.delete(HARDCODED_USER_ID, reviewId)
+                if (success) {
+                    // Remover la reseña de la lista local
+                    val updatedReviews = _uiState.value.reviews.filter { it.id != reviewId }
+                    _uiState.value = _uiState.value.copy(reviews = updatedReviews)
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(errorMessage = e.message)
             }
@@ -75,5 +133,9 @@ class ReviewsViewModel @Inject constructor() : ViewModel() {
     
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+    
+    fun refreshReviews() {
+        loadReviews()
     }
 }

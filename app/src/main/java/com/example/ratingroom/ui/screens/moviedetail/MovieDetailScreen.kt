@@ -5,21 +5,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -40,19 +28,24 @@ fun MovieDetailRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     MovieDetailScreen(
         uiState = uiState,
+        movieId = movieId,
         onBack = onBack,
-        onClearError = { viewModel.clearError() }
+        onClearError = { viewModel.clearError() },
+        onCreateReview = { rating, texto -> viewModel.createReview(movieId, rating, texto) }
     )
 }
 
 @Composable
 fun MovieDetailScreen(
     uiState: MovieDetailUIState,
+    movieId: Int,
     onBack: () -> Unit = {},
-    onClearError: () -> Unit = {}
+    onClearError: () -> Unit = {},
+    onCreateReview: (Int, String) -> Unit = { _, _ -> }
 ) {
     val movie = uiState.movie
     val snackbarHostState = SnackbarHostState()
+    var showCreateReview by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { snackbarHostState.showSnackbar(it) }
@@ -83,6 +76,18 @@ fun MovieDetailScreen(
                     Text(
                         text = movie?.title ?: "Detalle",
                         style = MaterialTheme.typography.titleLarge
+                    )
+                }
+            }
+        },
+        floatingActionButton = {
+            if (movie != null) {
+                FloatingActionButton(
+                    onClick = { showCreateReview = true }
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = "Crear reseña"
                     )
                 }
             }
@@ -173,6 +178,20 @@ fun MovieDetailScreen(
             }
         }
     }
+    
+    // Diálogo para crear reseña
+    if (showCreateReview) {
+        ReviewEditorDialog(
+            title = "Nueva reseña",
+            initialRating = 5,
+            initialText = "",
+            onDismiss = { showCreateReview = false },
+            onConfirm = { rating, text ->
+                onCreateReview(rating, text)
+                showCreateReview = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -198,4 +217,43 @@ private fun ReviewItem(review: Review) {
             )
         }
     }
+}
+
+@Composable
+private fun ReviewEditorDialog(
+    title: String,
+    initialRating: Int,
+    initialText: String,
+    onDismiss: () -> Unit,
+    onConfirm: (Int, String) -> Unit
+) {
+    var ratingText by remember { mutableStateOf(initialRating.toString()) }
+    var comment by remember { mutableStateOf(initialText) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = ratingText,
+                    onValueChange = { if (it.all(Char::isDigit)) ratingText = it },
+                    label = { Text("Rating (1-5)") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { comment = it },
+                    label = { Text("Comentario") }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val rating = ratingText.toIntOrNull()?.coerceIn(1, 5) ?: 5
+                onConfirm(rating, comment.trim())
+            }) { Text("Guardar") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
 }

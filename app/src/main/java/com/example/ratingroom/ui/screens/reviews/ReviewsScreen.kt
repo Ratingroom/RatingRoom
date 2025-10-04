@@ -3,6 +3,8 @@ package com.example.ratingroom.ui.screens.reviews
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -13,6 +15,7 @@ import com.example.ratingroom.ui.utils.AppTopBar
 import com.example.ratingroom.ui.utils.TopBarConfig
 import com.example.ratingroom.ui.utils.EmptyActivityState
 import com.example.ratingroom.ui.utils.ReviewCard
+import com.example.ratingroom.ui.utils.ReviewEditorDialog
 import com.example.ratingroom.ui.theme.RatingRoomTheme
 
 @Composable
@@ -26,8 +29,8 @@ fun ReviewsScreen(
     ReviewsScreenContent(
         uiState = uiState,
         onBack = onBack,
-        onEditReview = viewModel::editReview,
-        onDeleteReview = viewModel::deleteReview,
+        onEditReview = { reviewId, rating, texto -> viewModel.editReview(reviewId, rating, texto) },
+        onDeleteReview = { reviewId -> viewModel.deleteReview(reviewId) },
         onClearError = viewModel::clearError,
         modifier = modifier
     )
@@ -37,11 +40,12 @@ fun ReviewsScreen(
 fun ReviewsScreenContent(
     uiState: ReviewsUIState,
     onBack: () -> Unit,
-    onEditReview: (ReviewItem) -> Unit,
-    onDeleteReview: (ReviewItem) -> Unit,
+    onEditReview: (Int, Int, String) -> Unit,
+    onDeleteReview: (Int) -> Unit,
     onClearError: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var editingReview by remember { mutableStateOf<ReviewItem?>(null) }
 
     Scaffold(
         topBar = {
@@ -88,14 +92,39 @@ fun ReviewsScreenContent(
                             title = review.movieTitle,
                             rating = review.rating,
                             excerpt = review.comment,
-                            timeAgo = "Hace 3 días"
+                            timeAgo = "Hace 3 días",
+                            onEdit = { editingReview = review },
+                            onDelete = { onDeleteReview(review.id) }
                         )
                     }
                 }
             }
         }
     }
+
+    // Dialog para editar reseña
+    editingReview?.let { review ->
+        ReviewEditorDialog(
+            title = "Editar reseña",
+            initialRating = review.rating,
+            initialText = review.comment,
+            onDismiss = { editingReview = null },
+            onConfirm = { rating, text ->
+                onEditReview(review.id, rating, text)
+                editingReview = null
+            }
+        )
+    }
+
+    // Mostrar errores
+    uiState.errorMessage?.let { error ->
+        LaunchedEffect(error) {
+            // Aquí podrías mostrar un Snackbar si quisieras
+            onClearError()
+        }
+    }
 }
+
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun ReviewsScreenPreview() {
@@ -104,11 +133,15 @@ fun ReviewsScreenPreview() {
             uiState = ReviewsUIState(
                 reviews = listOf(
                     ReviewItem(
+                        id = 1,
+                        movieId = 1,
                         movieTitle = "Inception",
                         rating = 5,
                         comment = "Una película increíble que te hace pensar."
                     ),
                     ReviewItem(
+                        id = 2,
+                        movieId = 2,
                         movieTitle = "The Matrix",
                         rating = 4,
                         comment = "Un clásico del cine de ciencia ficción."
@@ -117,8 +150,8 @@ fun ReviewsScreenPreview() {
                 isLoading = false
             ),
             onBack = {},
-            onEditReview = {},
-            onDeleteReview = {},
+            onEditReview = { _, _, _ -> },
+            onDeleteReview = { },
             onClearError = {}
         )
     }

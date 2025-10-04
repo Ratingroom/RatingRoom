@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+// TODO: Firebase - Descomentado temporalmente para limpiar sesión
 import com.example.ratingroom.data.repository.AuthRepository
 import com.example.ratingroom.ui.theme.RatingRoomTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -40,7 +41,7 @@ import javax.inject.Inject
 @SuppressLint("CustomSplashScreen")
 @AndroidEntryPoint
 class SplashActivity : ComponentActivity() {
-    
+    // TODO: Firebase - Descomentado temporalmente para limpiar sesión
     @Inject
     lateinit var authRepository: AuthRepository
     
@@ -63,8 +64,15 @@ class SplashActivity : ComponentActivity() {
     }
     
     private fun checkAuthAndNavigate() {
+        // TODO: Firebase - Descomentado temporalmente para limpiar sesión
+        // Forzar logout de Firebase para limpiar cualquier sesión anterior
+        authRepository.signOut()
+        
         // Verificar si el usuario ya está autenticado
-        val isUserLoggedIn = authRepository.isUserLoggedIn()
+        // val isUserLoggedIn = authRepository.isUserLoggedIn()
+        
+        // Forzar usuario logueado para usar REST API con ID quemado
+        val isUserLoggedIn = true
         
         val intent = Intent(this, MainActivity::class.java).apply {
             // Pasar información sobre el estado de autenticación

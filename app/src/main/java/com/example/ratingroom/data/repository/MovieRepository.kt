@@ -266,7 +266,7 @@ object MovieRepository {
             return@withContext emptyList()
         }
 
-        val arr = asArrayFlexible(root, "data", "rows")
+        val arr = asArrayFlexible(root, "data", "reviews")
         val effective = if (arr.size() == 0) asArrayFlexible(root) else arr
 
         return@withContext effective.mapNotNull { it.asJsonObjectOrNull()?.let(::mapReview) }
