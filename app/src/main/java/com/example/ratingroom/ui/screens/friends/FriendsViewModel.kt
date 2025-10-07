@@ -2,7 +2,7 @@ package com.example.ratingroom.ui.screens.friends
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.ratingroom.data.repository.FriendsRepository
+import com.example.ratingroom.repository.FriendsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow

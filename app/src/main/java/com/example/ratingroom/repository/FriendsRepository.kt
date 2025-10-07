@@ -1,4 +1,4 @@
-package com.example.ratingroom.data.repository
+package com.example.ratingroom.repository
 
 import com.example.ratingroom.R
 import com.example.ratingroom.data.models.Friend

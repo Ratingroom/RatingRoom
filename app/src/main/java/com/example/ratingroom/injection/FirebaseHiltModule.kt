@@ -1,4 +1,4 @@
-package com.example.ratingroom.data.injection
+package com.example.ratingroom.injection
 
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth

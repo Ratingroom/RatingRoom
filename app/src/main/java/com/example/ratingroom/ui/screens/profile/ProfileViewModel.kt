@@ -5,11 +5,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 // TODO: Firebase - Comentado temporalmente para usar solo REST API
 // import com.example.ratingroom.Config.CURRENT_USER_ID// import com.example.ratingroom.Config.CURRENT_USER_ID// import com.example.ratingroom.Config.CURRENT_USER_ID
-import com.example.ratingroom.data.remote.UserProfileDto
+import com.example.ratingroom.data.dtos.UserDto
 // TODO: Firebase - Comentado temporalmente para usar solo REST API
-// import com.example.ratingroom.data.repository.AuthRepository
-import com.example.ratingroom.data.remote.RetrofitClient
-import com.example.ratingroom.data.repository.ReviewRepository
+// import com.example.ratingroom.repository.AuthRepository
+import com.example.ratingroom.data.services.ReviewApiService
+import com.example.ratingroom.repository.ReviewRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,13 +19,13 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
+    private val reviewRepository: ReviewRepository
     // TODO: Firebase - Comentado temporalmente para usar solo REST API
     // private val authRepository: AuthRepository
 ) : ViewModel() {
 
     // ID de usuario quemado para obtener datos de REST API
     private val HARDCODED_USER_ID = 2
-    private val repo = ReviewRepository(RetrofitClient.reviewApi)
 
     private val _uiState = MutableStateFlow(ProfileUIState(isLoading = true))
     val uiState: StateFlow<ProfileUIState> = _uiState.asStateFlow()
@@ -40,16 +40,27 @@ class ProfileViewModel @Inject constructor(
         Log.d("ProfileViewModel", "¿userId == HARDCODED_USER_ID? ${userId == HARDCODED_USER_ID}")
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            Log.d("ProfileViewModel", "Llamando repo.getUserProfile($userId)")
-            runCatching { repo.getUserProfile(userId) }
+            Log.d("ProfileViewModel", "Llamando reviewRepository.getUserProfile($userId)")
+            runCatching { reviewRepository.getUserProfile(userId) }
                 .onSuccess { prof ->
                     Log.d("ProfileViewModel", "=== RESPUESTA EXITOSA ===")
                     Log.d("ProfileViewModel", "Respuesta recibida: $prof")
                     Log.d("ProfileViewModel", "ID del usuario recibido: ${prof?.id}")
-                    Log.d("ProfileViewModel", "Nombre del usuario recibido: ${prof?.nombre}")
+                    Log.d("ProfileViewModel", "Nombre del usuario recibido: ${prof?.displayName}")
                     Log.d("ProfileViewModel", "Email del usuario recibido: ${prof?.email}")
-                    val reviews = prof?.reviews ?: emptyList()
-                    val profileData = prof?.toProfileData()
+                    // TODO: Obtener reviews por separado cuando esté disponible
+                    val reviews = emptyList<com.example.ratingroom.data.dtos.ReviewDto>()
+                    val profileData = prof?.let { user ->
+                        ProfileData(
+                            name = user.displayName,
+                            email = user.email,
+                            memberSince = null,
+                            favoriteGenre = user.favoriteGenre,
+                            reviewsCount = 0, // TODO: Calcular cuando tengamos las reviews
+                            averageRating = 0.0, // TODO: Calcular cuando tengamos las reviews
+                            profileImageUrl = user.profileImageUrl
+                        )
+                    }
                     Log.d("ProfileViewModel", "ProfileData mapeado: $profileData")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -71,7 +82,7 @@ class ProfileViewModel @Inject constructor(
 
     fun createReview(articuloId: Int, rating: Int, texto: String) {
         viewModelScope.launch {
-            runCatching { repo.create(HARDCODED_USER_ID, articuloId, rating, texto) }
+            runCatching { reviewRepository.create(HARDCODED_USER_ID, articuloId, rating, texto) }
                 .onSuccess { created ->
                     if (created != null) {
                         _uiState.value = _uiState.value.copy(
@@ -87,7 +98,7 @@ class ProfileViewModel @Inject constructor(
 
     fun updateReview(reviewId: Int, rating: Int, texto: String) {
         viewModelScope.launch {
-            runCatching { repo.update(HARDCODED_USER_ID, reviewId, rating, texto) }
+            runCatching { reviewRepository.update(HARDCODED_USER_ID, reviewId, rating, texto) }
                 .onSuccess { updated ->
                     if (updated != null) {
                         _uiState.value = _uiState.value.copy(
@@ -103,7 +114,7 @@ class ProfileViewModel @Inject constructor(
 
     fun deleteReview(reviewId: Int) {
         viewModelScope.launch {
-            runCatching { repo.delete(HARDCODED_USER_ID, reviewId) }
+            runCatching { reviewRepository.delete(HARDCODED_USER_ID, reviewId) }
                 .onSuccess { ok ->
                     if (ok) {
                         _uiState.value = _uiState.value.copy(
@@ -126,14 +137,14 @@ class ProfileViewModel @Inject constructor(
     }
 
     // Mapper del DTO del backend a datos de UI
-    private fun UserProfileDto.toProfileData() = ProfileData(
-        name = nombre?.takeIf { it.isNotBlank() } ?: username,
+    private fun UserDto.toProfileData() = ProfileData(
+        name = displayName,
         email = email,
         memberSince = null,
-        favoriteGenre = null,
-        reviewsCount = reviews.size,
-        averageRating = reviews.map { it.rating }.average().takeIf { !it.isNaN() } ?: 0.0,
-        profileImageUrl = fotoPerfil
+        favoriteGenre = favoriteGenre,
+        reviewsCount = 0, // TODO: Calcular cuando tengamos las reviews
+        averageRating = 0.0, // TODO: Calcular cuando tengamos las reviews
+        profileImageUrl = profileImageUrl
     )
 
     fun logout() {

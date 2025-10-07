@@ -1,7 +1,9 @@
-package com.example.ratingroom.data.injection
+package com.example.ratingroom.injection
 
 import com.example.ratingroom.data.datasource.AuthRemoteDataSource
 import com.example.ratingroom.data.datasource.FirestoreDataSource
+import com.example.ratingroom.data.datasource.impl.AuthRemoteDataSourceImpl
+import com.example.ratingroom.data.datasource.impl.FirestoreDataSourceImpl
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Module
@@ -19,7 +21,7 @@ object DataSourceModule {
     fun provideAuthRemoteDataSource(
         authService: FirebaseAuth
     ): AuthRemoteDataSource {
-        return AuthRemoteDataSource(authService)
+        return AuthRemoteDataSourceImpl(authService)
     }
 
     @Provides
@@ -28,6 +30,6 @@ object DataSourceModule {
         firestoreService: FirebaseFirestore,
         authService: FirebaseAuth
     ): FirestoreDataSource {
-        return FirestoreDataSource(firestoreService, authService)
+        return FirestoreDataSourceImpl(firestoreService, authService)
     }
 }

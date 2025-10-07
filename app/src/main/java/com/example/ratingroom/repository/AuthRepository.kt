@@ -1,4 +1,4 @@
-package com.example.ratingroom.data.repository
+package com.example.ratingroom.repository
 
 import com.example.ratingroom.data.datasource.AuthRemoteDataSource
 import com.example.ratingroom.data.datasource.FirestoreDataSource

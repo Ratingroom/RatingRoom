@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.ratingroom.ui.utils.*
 import com.example.ratingroom.ui.theme.RatingRoomTheme
-import com.example.ratingroom.data.repository.FriendsRepository
+import com.example.ratingroom.repository.FriendsRepository
 import com.example.ratingroom.data.models.Friend
 import com.example.ratingroom.data.models.FriendActivity
 import com.example.ratingroom.data.models.FriendshipType

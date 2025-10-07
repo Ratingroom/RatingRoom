@@ -1,6 +1,6 @@
 package com.example.ratingroom.ui.screens.profile
 
-import com.example.ratingroom.data.remote.ReviewDto
+import com.example.ratingroom.data.dtos.ReviewDto
 
 data class ProfileData(
     val name: String,

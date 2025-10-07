@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.ratingroom.data.models.Movie
-import com.example.ratingroom.data.repository.MovieRepository
+import com.example.ratingroom.repository.MovieRepository
 import com.example.ratingroom.ui.theme.RatingRoomTheme
 import com.example.ratingroom.ui.utils.MovieCard
 
