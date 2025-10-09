@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.example.ratingroom.R
+import com.example.ratingroom.ui.screens.profile.ProfileData
 
 data class TopBarConfig(
     val title: String,
@@ -29,7 +30,8 @@ data class TopBarConfig(
     val onProfileMenuExpandedChange: (Boolean) -> Unit = {},
     val onProfileClick: () -> Unit = {},
     val onFriendsClick: () -> Unit = {},
-    val onLogoutClick: () -> Unit = {}
+    val onLogoutClick: () -> Unit = {},
+    val profileData: ProfileData? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -93,7 +95,8 @@ fun AppTopBar(config: TopBarConfig) {
                     onExpandedChange = config.onProfileMenuExpandedChange,
                     onProfileClick = config.onProfileClick,
                     onFriendsClick = config.onFriendsClick,
-                    onLogoutClick = config.onLogoutClick
+                    onLogoutClick = config.onLogoutClick,
+                    profileData = config.profileData
                 )
             }
         },

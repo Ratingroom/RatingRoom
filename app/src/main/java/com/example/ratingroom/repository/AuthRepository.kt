@@ -49,15 +49,28 @@ class AuthRepository @Inject constructor(
     suspend fun signUp(
         email: String,
         password: String,
-        displayName: String? = null
+        displayName: String? = null,
+        favoriteGenre: String? = null,
+        birthYear: String? = null
     ): Result<FirebaseUser> {
         return runCatching {
+            // 1. Crear usuario en Firebase Auth
             val user = authRemoteDataSource.signUp(
                 email = email,
                 password = password,
                 displayName = displayName
+            ) ?: error("No se pudo crear la cuenta.")
+            
+            // 2. Crear documento del usuario en Firestore
+            firestoreDataSource.createUserDocument(
+                userId = user.uid,
+                email = email,
+                fullName = displayName,
+                favoriteGenre = favoriteGenre,
+                birthYear = birthYear
             )
-            user ?: error("No se pudo crear la cuenta.")
+            
+            user
         }.mapErrorAuth()
     }
 

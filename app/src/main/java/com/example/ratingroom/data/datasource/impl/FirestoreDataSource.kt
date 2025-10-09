@@ -98,12 +98,13 @@ class FirestoreDataSourceImpl @Inject constructor(
         }
     }
 
+    override
     suspend fun createUserDocument(
         userId: String,
         email: String,
-        fullName: String? = null,
-        favoriteGenre: String? = null,
-        birthYear: String? = null
+        fullName: String?,
+        favoriteGenre: String?,
+        birthYear: String?
     ) {
         println("FirestoreDataSource.createUserDocument: Creando documento para usuario: $userId")
         

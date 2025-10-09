@@ -12,4 +12,11 @@ interface FirestoreDataSource {
         website: String?,
         profileImageUrl: String?
     )
+    suspend fun createUserDocument(
+        userId: String,
+        email: String,
+        fullName: String? = null,
+        favoriteGenre: String? = null,
+        birthYear: String? = null
+    )
 }

@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.ratingroom.R
+import com.example.ratingroom.ui.screens.profile.ProfileData
 
 @Composable
 fun ProfileMenu(
@@ -20,6 +21,7 @@ fun ProfileMenu(
     onProfileClick: () -> Unit,
     onFriendsClick: () -> Unit,
     onLogoutClick: () -> Unit,
+    profileData: ProfileData? = null,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier) {
@@ -27,10 +29,15 @@ fun ProfileMenu(
             modifier = Modifier
                 .padding(end = 16.dp)
                 .size(32.dp)
-                .background(MaterialTheme.colorScheme.surface, CircleShape)
                 .clickable { onExpandedChange(true) },
             contentAlignment = Alignment.Center
-        ) {}
+        ) {
+            AvatarInitials(
+                initials = profileData?.name?.take(2)?.uppercase() ?: "U",
+                imageUrl = profileData?.profileImageUrl,
+                size = 32.dp
+            )
+        }
 
         DropdownMenu(
             expanded = expanded,
