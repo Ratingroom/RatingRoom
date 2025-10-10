@@ -2,7 +2,7 @@ package com.example.ratingroom.ui.screens.synopsis
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.ratingroom.data.repository.MovieRepository
+import com.example.ratingroom.repository.MovieRepository
 import com.example.ratingroom.ui.screens.synopsis.CastMember
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject

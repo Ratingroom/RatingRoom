@@ -16,7 +16,7 @@
     import androidx.compose.ui.unit.dp
     import androidx.compose.ui.unit.sp
     import androidx.hilt.navigation.compose.hiltViewModel
-    import com.example.ratingroom.data.remote.ReviewDto
+    import com.example.ratingroom.data.dtos.ReviewDto
     import com.example.ratingroom.ui.theme.RatingRoomTheme
     import com.example.ratingroom.ui.utils.*
 

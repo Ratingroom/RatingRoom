@@ -3,7 +3,7 @@ package com.example.ratingroom.ui.screens.profile
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.ratingroom.data.repository.AuthRepository
+import com.example.ratingroom.repository.AuthRepository
 import com.google.firebase.storage.FirebaseStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject

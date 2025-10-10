@@ -2,9 +2,9 @@ package com.example.ratingroom.ui.screens.moviedetail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.ratingroom.data.remote.RetrofitClient
-import com.example.ratingroom.data.repository.MovieRepository
-import com.example.ratingroom.data.repository.ReviewRepository
+import com.example.ratingroom.data.services.ReviewApiService
+import com.example.ratingroom.repository.MovieRepository
+import com.example.ratingroom.repository.ReviewRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,11 +13,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class MovieDetailViewModel @Inject constructor() : ViewModel() {
+class MovieDetailViewModel @Inject constructor(
+    private val reviewRepository: ReviewRepository
+) : ViewModel() {
     
     // ID de usuario quemado para obtener datos de REST API
     private val HARDCODED_USER_ID = 2
-    private val reviewRepo = ReviewRepository(RetrofitClient.reviewApi)
     
     private val _uiState = MutableStateFlow(MovieDetailUIState())
     val uiState: StateFlow<MovieDetailUIState> = _uiState.asStateFlow()
@@ -51,7 +52,7 @@ class MovieDetailViewModel @Inject constructor() : ViewModel() {
     fun createReview(movieId: Int, rating: Int, texto: String) {
         viewModelScope.launch {
             try {
-                val created = reviewRepo.create(HARDCODED_USER_ID, movieId, rating, texto)
+                val created = reviewRepository.create(HARDCODED_USER_ID, movieId, rating, texto)
                 if (created != null) {
                     // Recargar las reseñas de la película para mostrar la nueva reseña
                     loadMovieDetail(movieId)

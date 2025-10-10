@@ -2,7 +2,7 @@ package com.example.ratingroom.ui.screens.register
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.ratingroom.data.repository.AuthRepository
+import com.example.ratingroom.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -130,10 +130,12 @@ class RegisterViewModel @Inject constructor(
             authRepository.signUp(
                 email = currentState.email,
                 password = currentState.password,
-                displayName = currentState.fullName
+                displayName = currentState.fullName,
+                favoriteGenre = currentState.favoriteGenre.takeIf { it.isNotBlank() },
+                birthYear = currentState.birthYear.takeIf { it.isNotBlank() }
             )
                 .onSuccess {
-                    println("RegisterViewModel: Registro exitoso")
+                    println("RegisterViewModel: Registro exitoso - Usuario creado en Auth y Firestore")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         successMessage = "Registro exitoso"

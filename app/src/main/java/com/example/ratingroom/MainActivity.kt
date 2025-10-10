@@ -77,6 +77,23 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
     // Obtener datos del usuario para el drawer
     val profileViewModel: ProfileViewModel = hiltViewModel()
     val profileUiState by profileViewModel.uiState.collectAsState()
+    
+    // Recargar perfil cuando cambia la ruta desde login a otra pantalla
+    LaunchedEffect(currentRoute) {
+        if (currentRoute != Screen.Login.route && 
+            currentRoute != Screen.Register.route && 
+            currentRoute != Screen.ForgotPassword.route &&
+            profileUiState.profileData == null &&
+            !profileUiState.isLoading) {
+            println("MainActivity: Ruta cambió a $currentRoute, recargando perfil...")
+            profileViewModel.loadProfile()
+        }
+    }
+    
+    // Debug: Verificar qué datos tiene el profileUiState
+    println("MainActivity: profileUiState.profileData = ${profileUiState.profileData}")
+    println("MainActivity: isLoading = ${profileUiState.isLoading}")
+    println("MainActivity: errorMessage = ${profileUiState.errorMessage}")
 
     val navigateToScreen: (String) -> Unit = { route ->
         navController.navigate(route) { launchSingleTop = true }
@@ -114,11 +131,12 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
 
                 topBar = {
                     if (showTopBar) {
-                ModernTopBar(
-                    title = currentTitle,
-                    onMenuClick = { mainViewModel.toggleDrawer() }
-                )
-            }
+                        ModernTopBar(
+                            title = currentTitle,
+                            onMenuClick = { mainViewModel.toggleDrawer() },
+                            profileData = profileUiState.profileData
+                        )
+                    }
                 },
                 containerColor = Color.Transparent,
                 contentWindowInsets = WindowInsets(0,0,0,0)

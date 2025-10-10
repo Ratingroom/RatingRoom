@@ -1,4 +1,4 @@
-package com.example.ratingroom.data.repository
+package com.example.ratingroom.repository
 
 import android.util.Log
 import com.example.ratingroom.data.models.Movie

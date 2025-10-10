@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 // TODO: Firebase - Descomentado temporalmente para limpiar sesión
-import com.example.ratingroom.data.repository.AuthRepository
+import com.example.ratingroom.repository.AuthRepository
 import com.example.ratingroom.ui.theme.RatingRoomTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay

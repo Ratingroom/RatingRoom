@@ -2,9 +2,9 @@ package com.example.ratingroom.ui.screens.reviews
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.ratingroom.data.remote.RetrofitClient
-import com.example.ratingroom.data.repository.MovieRepository
-import com.example.ratingroom.data.repository.ReviewRepository
+import com.example.ratingroom.data.services.ReviewApiService
+import com.example.ratingroom.repository.MovieRepository
+import com.example.ratingroom.repository.ReviewRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,11 +13,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class ReviewsViewModel @Inject constructor() : ViewModel() {
+class ReviewsViewModel @Inject constructor(
+    private val reviewRepository: ReviewRepository
+) : ViewModel() {
     
     // ID de usuario quemado para obtener datos de REST API
     private val HARDCODED_USER_ID = 2
-    private val reviewRepo = ReviewRepository(RetrofitClient.reviewApi)
     
     private val _uiState = MutableStateFlow(ReviewsUIState())
     val uiState: StateFlow<ReviewsUIState> = _uiState.asStateFlow()
@@ -33,8 +34,7 @@ class ReviewsViewModel @Inject constructor() : ViewModel() {
             try {
                 println("ReviewsViewModel: Iniciando carga de reseñas para usuario $HARDCODED_USER_ID")
                 
-                // Obtener reseñas reales del usuario desde el backend
-                val userReviews = reviewRepo.listByUser(HARDCODED_USER_ID)
+                val userReviews = reviewRepository.listByUser(HARDCODED_USER_ID)
                 println("ReviewsViewModel: Reseñas obtenidas del backend: ${userReviews.size}")
                 userReviews.forEach { review ->
                     println("ReviewsViewModel: Review ID=${review.id}, Rating=${review.rating}, PeliculaID=${review.pelicula_id}")
@@ -98,7 +98,7 @@ class ReviewsViewModel @Inject constructor() : ViewModel() {
     fun editReview(reviewId: Int, rating: Int, texto: String) {
         viewModelScope.launch {
             try {
-                val updated = reviewRepo.update(HARDCODED_USER_ID, reviewId, rating, texto)
+                val updated = reviewRepository.update(HARDCODED_USER_ID, reviewId, rating, texto)
                 if (updated != null) {
                     // Actualizar la reseña en la lista local
                     val updatedReviews = _uiState.value.reviews.map { review ->
@@ -119,7 +119,7 @@ class ReviewsViewModel @Inject constructor() : ViewModel() {
     fun deleteReview(reviewId: Int) {
         viewModelScope.launch {
             try {
-                val success = reviewRepo.delete(HARDCODED_USER_ID, reviewId)
+                val success = reviewRepository.delete(HARDCODED_USER_ID, reviewId)
                 if (success) {
                     // Remover la reseña de la lista local
                     val updatedReviews = _uiState.value.reviews.filter { it.id != reviewId }
