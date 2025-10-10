@@ -31,21 +31,21 @@ class MovieDetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
             runCatching {
+                // ✅ Volvemos a tu método original que SÍ existe
                 val movie = MovieRepository.getMovieById(movieId)
 
-                // 🔁 AHORA las reseñas vienen de Firestore via ReviewRepository
+                // ✅ Reseñas desde Firestore a través del repositorio que ya inyectas
                 val reviewsDto = reviewRepository.getReviewsByMovie(movieId)
 
-                // 🔀 Mapper DTO -> data.models.Review (tu modelo usa Double y más campos)
+                // ✅ Mapper DTO -> data.models.Review (tu modelo usa Double en rating)
                 val reviews: List<Review> = reviewsDto.map { dto ->
                     Review(
-                        id = dto.id,                                   // Int
-                        movieId = dto.pelicula_id,                     // Int
-                        userId = dto.usuario_id,                       // Int
-                        rating = dto.rating.toDouble(),                // Double requerido por tu modelo
-                        comment = dto.texto,                           // String
-                        date = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
-                            .format(Date())                            // si luego guardas timestamp, cámbialo aquí
+                        id = dto.id,
+                        movieId = dto.pelicula_id,
+                        userId = dto.usuario_id,
+                        rating = dto.rating.toDouble(),
+                        comment = dto.texto,
+                        date = SimpleDateFormat("dd/MM/yyyy", Locale("es")).format(Date())
                     )
                 }
 

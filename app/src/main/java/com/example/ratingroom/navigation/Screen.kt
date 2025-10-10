@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.vector.ImageVector
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector? = null) {
+
     // ---------- AUTENTICACIÓN ----------
     object Login : Screen("login", "Iniciar Sesión")
     object Register : Screen("register", "Registrarse")
@@ -22,15 +23,18 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
 
     // ---------- DETALLES ----------
     object MovieDetail : Screen("movie_detail/{movieId}", "Detalle de Película") {
+        const val ARG = "movieId"
         fun createRoute(movieId: Int) = "movie_detail/$movieId"
     }
 
     object Synopsis : Screen("synopsis/{movieId}", "Sinopsis") {
+        const val ARG = "movieId"
         fun createRoute(movieId: Int) = "synopsis/$movieId"
     }
 
     // ---------- PERFIL DE OTRO USUARIO ----------
     object Friend : Screen("friend/{userId}", "Perfil de Usuario") {
+        const val ARG = "userId"
         fun createRoute(userId: String) = "friend/$userId"
     }
 
