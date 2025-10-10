@@ -11,6 +11,7 @@ import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -40,12 +41,12 @@ class AuthRepository @Inject constructor(
     // ---------- Sign In ----------
     suspend fun signIn(email: String, password: String): Result<FirebaseUser> {
         return runCatching {
-            authRemoteDataSource.signIn(email, password)
+            authRemoteDataSource.signIn(email.trim(), password)
                 ?: error("No se pudo iniciar sesión.")
         }.mapErrorAuth()
     }
 
-    // ---------- Sign Up ----------
+    // ---------- Sign Up (Auth + Firestore con rollback si falla Firestore) ----------
     suspend fun signUp(
         email: String,
         password: String,
@@ -54,22 +55,31 @@ class AuthRepository @Inject constructor(
         birthYear: String? = null
     ): Result<FirebaseUser> {
         return runCatching {
-            // 1. Crear usuario en Firebase Auth
+            // 1) Crear usuario en Firebase Auth
+            val normalizedEmail = email.trim().lowercase()
             val user = authRemoteDataSource.signUp(
-                email = email,
+                email = normalizedEmail,
                 password = password,
                 displayName = displayName
             ) ?: error("No se pudo crear la cuenta.")
-            
-            // 2. Crear documento del usuario en Firestore
-            firestoreDataSource.createUserDocument(
-                userId = user.uid,
-                email = email,
-                fullName = displayName,
-                favoriteGenre = favoriteGenre,
-                birthYear = birthYear
-            )
-            
+
+            // 2) Crear documento del usuario en Firestore
+            //    Importante: si falla, se hace rollback del usuario en Auth para no dejar huérfanos.
+            try {
+                firestoreDataSource.createUserDocument(
+                    userId = user.uid,
+                    email = normalizedEmail,
+                    fullName = displayName,
+                    favoriteGenre = favoriteGenre,
+                    birthYear = birthYear
+                )
+            } catch (firestoreError: Throwable) {
+                // Rollback: borrar usuario creado en Auth
+                try { user.delete().await() } catch (_: Throwable) { /* ignorar */ }
+                throw firestoreError
+            }
+
+            // 3) Éxito total
             user
         }.mapErrorAuth()
     }
@@ -77,7 +87,7 @@ class AuthRepository @Inject constructor(
     // ---------- Password Reset ----------
     suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
         return runCatching {
-            authRemoteDataSource.sendPasswordResetEmail(email)
+            authRemoteDataSource.sendPasswordResetEmail(email.trim())
         }.mapErrorAuth()
     }
 
@@ -95,12 +105,12 @@ class AuthRepository @Inject constructor(
         return runCatching {
             // Cambios en Firebase Auth si aplica
             displayName?.let { authRemoteDataSource.updateDisplayName(it) }
-            email?.let { authRemoteDataSource.updateUserEmail(it) }
+            email?.let { authRemoteDataSource.updateUserEmail(it.trim()) }
 
-            // Cambios en Firestore
+            // Cambios en Firestore (solo campos no nulos)
             firestoreDataSource.updateUserProfile(
                 displayName = displayName,
-                email = email,
+                email = email?.trim(),
                 biography = biography,
                 location = location,
                 favoriteGenre = favoriteGenre,
@@ -134,6 +144,7 @@ class AuthRepository @Inject constructor(
                     updatedAt = profileData["updatedAt"] as? Long
                 )
             } else {
+                // Si no hay doc en Firestore, al menos devolvemos lo básico de Auth
                 UserProfile(
                     uid = user.uid,
                     email = user.email ?: "",
@@ -153,7 +164,7 @@ class AuthRepository @Inject constructor(
     }
 }
 
-/** Mapea excepciones de Auth/Network a mensajes específicos dentro de Result */
+/** Mapea excepciones comunes de Auth/Network a Result con mensajes amigables */
 private fun <T> Result<T>.mapErrorAuth(): Result<T> {
     return fold(
         onSuccess = { Result.success(it) },
@@ -179,5 +190,4 @@ private fun <T> Result<T>.mapErrorAuth(): Result<T> {
             }
         }
     )
-
 }

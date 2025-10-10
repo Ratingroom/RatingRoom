@@ -3,13 +3,10 @@ package com.example.ratingroom.ui.screens.profile
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-
 import com.example.ratingroom.data.dtos.UserDto
 import com.example.ratingroom.repository.AuthRepository
 import com.example.ratingroom.repository.ReviewRepository
-import com.example.ratingroom.data.remote.RetrofitClient
 import com.example.ratingroom.repository.UserProfile
-
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +22,7 @@ class ProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository
 ) : ViewModel() {
 
-    // Mantenemos el repositorio REST para las reseñas por ahora
+    // Se mantiene para el fallback al backend REST cuando no hay sesión Firebase
     private val HARDCODED_USER_ID = 2
 
     private val _uiState = MutableStateFlow(ProfileUIState(isLoading = false))
@@ -35,19 +32,25 @@ class ProfileViewModel @Inject constructor(
         loadProfile()
     }
 
+    /** Expuesto para la UI (pull-to-refresh, botón reintentar, etc.) */
+    fun refresh() = loadProfile()
+
+    /**
+     * Carga “Mi perfil”.
+     * - Si hay sesión Firebase: lee Firestore (requisito: Ver mi perfil ✅).
+     * - Si falla o no hay sesión: intenta fallback con REST (tu flujo actual).
+     */
     fun loadProfile(userId: Int = HARDCODED_USER_ID) {
         Log.d("ProfileViewModel", "=== INICIO loadProfile ===")
         Log.d("ProfileViewModel", "loadProfile() iniciado con userId: $userId")
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            
-            // Verificar primero si hay un usuario autenticado en Firebase
+
             if (authRepository.isUserLoggedIn()) {
-                Log.d("ProfileViewModel", "✓ Usuario autenticado en Firebase, cargando desde Firestore primero...")
+                Log.d("ProfileViewModel", "✓ Usuario autenticado en Firebase, cargando desde Firestore...")
                 loadProfileFromFirebase()
             } else {
                 Log.d("ProfileViewModel", "✗ No hay usuario autenticado, intentando REST API...")
-                // Intentar con REST API
                 runCatching { reviewRepository.getUserProfile(userId) }
                     .onSuccess { prof ->
                         if (prof != null) {
@@ -100,7 +103,7 @@ class ProfileViewModel @Inject constructor(
             }
             .onFailure { e ->
                 Log.e("ProfileViewModel", "✗ Error al cargar desde Firebase: ${e.message}")
-                // Si Firebase falla, intentar con REST API como fallback
+                // Fallback a REST para no romper el flujo actual
                 Log.d("ProfileViewModel", "Intentando REST API como fallback...")
                 runCatching { reviewRepository.getUserProfile(HARDCODED_USER_ID) }
                     .onSuccess { prof ->
@@ -215,7 +218,7 @@ class ProfileViewModel @Inject constructor(
                 null
             }
         }
-        
+
         return ProfileData(
             name = fullName ?: "Usuario",
             email = email,

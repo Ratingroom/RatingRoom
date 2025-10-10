@@ -7,7 +7,6 @@ plugins {
     id("kotlin-kapt")
     id("com.google.gms.google-services")
     alias(libs.plugins.firebase.crashlytics)
-
 }
 
 android {
@@ -50,19 +49,23 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
-   // implementation(platform("com.google.firebase:firebase-bom:34.2.0"))
-    // implementation("com.google.firebase:firebase-analytics")
-    //Hilt
+
+    // Hilt
     implementation(libs.dagger.hilt)
     implementation(libs.hilt.compose.navigation)
     kapt(libs.dagger.kapt)
-    //Firebase
+
+    // Firebase (usando BOM del catalog)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.auth)
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.storage)
+
+    // Necesario para usar Task.await() con Firebase
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+
     // Compose BOM
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
@@ -70,6 +73,7 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation("androidx.compose.material:material-icons-extended")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -77,17 +81,18 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // Networking (si ya los usas)
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.navigation:navigation-compose:2.7.5")
-    implementation("androidx.navigation:navigation-compose:2.7.5")
     implementation("io.coil-kt:coil-compose:2.7.0")
-    
+
     // Splash Screen API
     implementation("androidx.core:core-splashscreen:1.0.1")
-
 }
