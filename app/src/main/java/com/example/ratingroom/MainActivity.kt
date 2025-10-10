@@ -136,8 +136,8 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                 contentWindowInsets = WindowInsets(0, 0, 0, 0)
             ) { innerPadding ->
 
-                val startDestination =
-                    if (isUserLoggedIn) Screen.MainMenu.route else Screen.Login.route
+                // ⬇️ INICIO SIEMPRE EN LOGIN
+                val startDestination = Screen.Login.route
 
                 NavHost(
                     navController = navController,
@@ -198,7 +198,7 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                         )
                     }
 
-                    // Friends -> SIEMPRE abre el perfil fijo TEST_USER_ID
+                    // Friends -> abre el perfil fijo TEST_USER_ID
                     composable(Screen.Friends.route) {
                         FriendsScreen(
                             onBack = navigateBack,
