@@ -3,8 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.dagger)
-    alias(libs.plugins.google.ksp)
-    id("kotlin-kapt")
+    alias(libs.plugins.google.ksp)          // ✅ KSP
+    // id("kotlin-kapt")                    // ❌ FUERA KAPT
     id("com.google.gms.google-services")
     alias(libs.plugins.firebase.crashlytics)
 }
@@ -19,7 +19,6 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -37,12 +36,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    kotlinOptions {
-        jvmTarget = "11"
-    }
-    buildFeatures {
-        compose = true
-    }
+    kotlinOptions { jvmTarget = "11" }
+
+    buildFeatures { compose = true }
 }
 
 dependencies {
@@ -53,9 +49,11 @@ dependencies {
     // Hilt
     implementation(libs.dagger.hilt)
     implementation(libs.hilt.compose.navigation)
-    kapt(libs.dagger.kapt)
+    // kapt(libs.dagger.kapt)               // ❌ FUERA KAPT
+    // Si tu libs.versions.toml NO define un alias para el compiler, usa explícito:
+    ksp("com.google.dagger:hilt-android-compiler:2.51.1")   // ✅ KSP compiler
 
-    // Firebase (usando BOM del catalog)
+    // Firebase (BOM)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.auth)
@@ -63,10 +61,10 @@ dependencies {
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.storage)
 
-    // Necesario para usar Task.await() con Firebase
+    // Tasks .await() con Firebase
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
-    // Compose BOM
+    // Compose
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
@@ -82,7 +80,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
-    // Networking (si ya los usas)
+    // Networking
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")

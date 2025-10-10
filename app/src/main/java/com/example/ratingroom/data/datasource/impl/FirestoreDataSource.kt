@@ -4,6 +4,7 @@ import com.example.ratingroom.data.datasource.FirestoreDataSource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
@@ -15,7 +16,8 @@ class FirestoreDataSourceImpl @Inject constructor(
     private val currentUserId: String?
         get() = authService.currentUser?.uid
 
-    // ===== Perfil =====
+    // ---------------- Perfil ----------------
+
     override suspend fun updateUserProfile(
         displayName: String?,
         email: String?,
@@ -27,6 +29,7 @@ class FirestoreDataSourceImpl @Inject constructor(
         profileImageUrl: String?
     ) {
         val userId = currentUserId ?: throw IllegalStateException("Usuario no autenticado")
+
         val updates = mutableMapOf<String, Any>()
         displayName?.let { updates["fullName"] = it }
         email?.let { updates["email"] = it }
@@ -38,19 +41,33 @@ class FirestoreDataSourceImpl @Inject constructor(
         profileImageUrl?.let { updates["profileImageUrl"] = it }
         updates["updatedAt"] = System.currentTimeMillis()
 
-        val docRef = firestoreService.collection("users").document(userId)
-        val docSnapshot = docRef.get().await()
-        if (docSnapshot.exists()) {
-            docRef.update(updates).await()
-        } else {
-            docRef.set(updates).await()
+        if (updates.isNotEmpty()) {
+            val docRef = firestoreService.collection("users").document(userId)
+            val snapshot = docRef.get().await()
+            if (snapshot.exists()) {
+                docRef.update(updates).await()
+            } else {
+                updates["createdAt"] = System.currentTimeMillis()
+                docRef.set(updates).await()
+            }
         }
     }
 
     override suspend fun getUserProfile(): Map<String, Any>? {
         val userId = currentUserId ?: return null
-        val snap = firestoreService.collection("users").document(userId).get().await()
-        return if (snap.exists()) snap.data else null
+        val document = firestoreService.collection("users")
+            .document(userId)
+            .get()
+            .await()
+        return if (document.exists()) document.data else null
+    }
+
+    override suspend fun getUserProfileById(userId: String): Map<String, Any>? {
+        val document = firestoreService.collection("users")
+            .document(userId)
+            .get()
+            .await()
+        return if (document.exists()) document.data else null
     }
 
     override suspend fun createUserDocument(
@@ -69,42 +86,90 @@ class FirestoreDataSourceImpl @Inject constructor(
         favoriteGenre?.let { data["favoriteGenre"] = it }
         birthYear?.let { data["birthYear"] = it }
 
-        firestoreService.collection("users").document(userId).set(data).await()
+        firestoreService.collection("users")
+            .document(userId)
+            .set(data)
+            .await()
     }
 
-    // ===== Reseñas =====
-    override suspend fun createReview(
+    // ---------------- Reseñas ----------------
+
+    override suspend fun createReviewFanout(
         userId: String,
         movieId: Int,
         rating: Int,
         text: String
-    ): Map<String, Any> {
-        val data = hashMapOf<String, Any>(
+    ): String {
+        // 1) Crea documento raíz en /reviews
+        val reviewDoc = firestoreService.collection("reviews").document()
+        val now = System.currentTimeMillis()
+        val reviewData = mapOf(
+            "id" to reviewDoc.id,
             "userId" to userId,
             "movieId" to movieId,
             "rating" to rating,
             "text" to text,
-            "createdAt" to FieldValue.serverTimestamp(),
-            "updatedAt" to FieldValue.serverTimestamp()
+            "createdAt" to now,
+            "updatedAt" to now
         )
-        val ref = firestoreService.collection("reviews").add(data).await()
-        val saved = ref.get().await()
-        return saved.data ?: emptyMap()
-    }
 
-    override suspend fun getReviewsByUser(userId: String): List<Map<String, Any>> {
-        val q = firestoreService.collection("reviews")
-            .whereEqualTo("userId", userId)
-            .get()
+        // Escritura inicial
+        reviewDoc.set(reviewData).await()
+
+        // 2) Fanout a /users/{uid}/reviews/{reviewId}
+        firestoreService.collection("users")
+            .document(userId)
+            .collection("reviews")
+            .document(reviewDoc.id)
+            .set(reviewData)
             .await()
-        return q.documents.mapNotNull { it.data }
+
+        // 3) Fanout a /movies/{movieId}/reviews/{reviewId}
+        firestoreService.collection("movies")
+            .document(movieId.toString())
+            .set(mapOf("updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge())
+            .await()
+
+        firestoreService.collection("movies")
+            .document(movieId.toString())
+            .collection("reviews")
+            .document(reviewDoc.id)
+            .set(reviewData)
+            .await()
+
+        return reviewDoc.id
     }
 
     override suspend fun getReviewsByMovie(movieId: Int): List<Map<String, Any>> {
-        val q = firestoreService.collection("reviews")
-            .whereEqualTo("movieId", movieId)
+        val snapshot = firestoreService.collection("movies")
+            .document(movieId.toString())
+            .collection("reviews")
             .get()
             .await()
-        return q.documents.mapNotNull { it.data }
+
+        return snapshot.documents.mapNotNull { doc ->
+            doc.data?.toMutableMap()?.apply {
+                if (this["id"] == null) this["id"] = doc.id
+            }
+        }
+    }
+
+    override suspend fun getReviewsByUser(userId: String): List<Map<String, Any>> {
+        val snapshot = firestoreService.collection("users")
+            .document(userId)
+            .collection("reviews")
+            .get()
+            .await()
+
+        return snapshot.documents.mapNotNull { doc ->
+            doc.data?.toMutableMap()?.apply {
+                if (this["id"] == null) this["id"] = doc.id
+            }
+        }
+    }
+
+    // Aux opcional si lo necesitas
+    suspend fun deleteUserDocument(userId: String) {
+        firestoreService.collection("users").document(userId).delete().await()
     }
 }

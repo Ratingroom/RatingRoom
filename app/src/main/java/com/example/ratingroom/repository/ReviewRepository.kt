@@ -11,19 +11,18 @@ class ReviewRepository @Inject constructor(
     private val authRepository: AuthRepository
 ) {
 
-    // ======== FIREBASE ========
-
     suspend fun create(currentUserId: Int, articuloId: Int, rating: Int, texto: String): ReviewDto? {
         val uid = authRepository.currentUser?.uid ?: return null
-        val saved = firestoreDataSource.createReview(
+
+        val reviewId = firestoreDataSource.createReviewFanout(
             userId = uid,
             movieId = articuloId,
             rating = rating,
             text = texto
         )
-        // Map a ReviewDto para no romper la UI ya existente
+
         return ReviewDto(
-            id = (saved["createdAt"]?.hashCode() ?: (System.currentTimeMillis().toInt())),
+            id = reviewId.hashCode(),
             usuario_id = currentUserId,
             pelicula_id = articuloId,
             rating = rating,
@@ -31,59 +30,76 @@ class ReviewRepository @Inject constructor(
         )
     }
 
+    suspend fun getReviewsByMovie(movieId: Int): List<ReviewDto> {
+        val list: List<Map<String, Any>> = firestoreDataSource.getReviewsByMovie(movieId)
+
+        return list.map { map ->
+            val movieIdFromDb = (map["movieId"] as? Number)?.toInt() ?: movieId
+            val ratingFromDb  = (map["rating"]  as? Number)?.toInt() ?: 0
+            val textFromDb    = map["text"] as? String ?: ""
+            val idStr         = (map["id"] as? String)
+                ?: "${movieIdFromDb}_${textFromDb.hashCode()}_${ratingFromDb}"
+
+            ReviewDto(
+                id = idStr.hashCode(),
+                usuario_id = 0,
+                pelicula_id = movieIdFromDb,
+                rating = ratingFromDb,
+                texto = textFromDb
+            )
+        }
+    }
+
     suspend fun getReviewsByUser(movieId: Int, userId: Int): List<ReviewDto> {
         val uid = authRepository.currentUser?.uid ?: return emptyList()
-        val list = firestoreDataSource.getReviewsByUser(uid)
-        // Si te interesa filtrar por película:
-        val filtered = if (movieId != 0) list.filter { (it["movieId"] as? Long)?.toInt() == movieId } else list
-        return filtered.map {
+        val list: List<Map<String, Any>> = firestoreDataSource.getReviewsByUser(uid)
+
+        val filtered = if (movieId != 0)
+            list.filter { (it["movieId"] as? Number)?.toInt() == movieId }
+        else
+            list
+
+        return filtered.map { map ->
+            val movieIdFromDb = (map["movieId"] as? Number)?.toInt() ?: 0
+            val ratingFromDb  = (map["rating"]  as? Number)?.toInt() ?: 0
+            val textFromDb    = map["text"] as? String ?: ""
+            val idStr         = (map["id"] as? String)
+                ?: "${movieIdFromDb}_${textFromDb.hashCode()}_${ratingFromDb}"
+
             ReviewDto(
-                id = (it["createdAt"]?.hashCode() ?: it.hashCode()),
+                id = idStr.hashCode(),
                 usuario_id = userId,
-                pelicula_id = (it["movieId"] as? Long)?.toInt() ?: 0,
-                rating = (it["rating"] as? Long)?.toInt() ?: 0,
-                texto = it["text"] as? String ?: ""
+                pelicula_id = movieIdFromDb,
+                rating = ratingFromDb,
+                texto = textFromDb
             )
         }
     }
 
-    suspend fun getReviewsByMovie(movieId: Int): List<ReviewDto> {
-        val list = firestoreDataSource.getReviewsByMovie(movieId)
-        return list.map {
+    // ➕ NUEVO: obtener reseñas de cualquier usuario por su UID de Firestore (para FriendScreen)
+    suspend fun getReviewsByUserUid(userUid: String): List<ReviewDto> {
+        val list: List<Map<String, Any>> = firestoreDataSource.getReviewsByUser(userUid)
+
+        return list.map { map ->
+            val movieIdFromDb = (map["movieId"] as? Number)?.toInt() ?: 0
+            val ratingFromDb  = (map["rating"]  as? Number)?.toInt() ?: 0
+            val textFromDb    = map["text"] as? String ?: ""
+            val idStr         = (map["id"] as? String)
+                ?: "${movieIdFromDb}_${textFromDb.hashCode()}_${ratingFromDb}"
+
             ReviewDto(
-                id = (it["createdAt"]?.hashCode() ?: it.hashCode()),
-                usuario_id = 0,
-                pelicula_id = (it["movieId"] as? Long)?.toInt() ?: movieId,
-                rating = (it["rating"] as? Long)?.toInt() ?: 0,
-                texto = it["text"] as? String ?: ""
+                id = idStr.hashCode(),
+                usuario_id = 0, // no usamos el id entero en Firestore
+                pelicula_id = movieIdFromDb,
+                rating = ratingFromDb,
+                texto = textFromDb
             )
         }
     }
 
-    // Placeholders para compatibilidad con tu UI (si no los usas, quedan así)
-    suspend fun update(currentUserId: Int, reviewId: Int, rating: Int, texto: String): ReviewDto? {
-        // Implementación de update por docId String se puede agregar luego
-        return null
-    }
-
-    suspend fun delete(currentUserId: Int, reviewId: Int): Boolean {
-        // Implementación de delete por docId String se puede agregar luego
-        return false
-    }
-
-    suspend fun listByUser(userId: Int): List<ReviewDto> {
-        val uid = authRepository.currentUser?.uid ?: return emptyList()
-        val list = firestoreDataSource.getReviewsByUser(uid)
-        return list.map {
-            ReviewDto(
-                id = (it["createdAt"]?.hashCode() ?: it.hashCode()),
-                usuario_id = userId,
-                pelicula_id = (it["movieId"] as? Long)?.toInt() ?: 0,
-                rating = (it["rating"] as? Long)?.toInt() ?: 0,
-                texto = it["text"] as? String ?: ""
-            )
-        }
-    }
-
-    suspend fun getUserProfile(userId: Int) = null // ya no se usa desde REST
+    // Placeholders para compatibilidad si se usan desde la UI
+    suspend fun update(currentUserId: Int, reviewId: Int, rating: Int, texto: String): ReviewDto? = null
+    suspend fun delete(currentUserId: Int, reviewId: Int): Boolean = false
+    suspend fun listByUser(userId: Int): List<ReviewDto> = getReviewsByUser(0, userId)
+    suspend fun getUserProfile(userId: Int) = null
 }

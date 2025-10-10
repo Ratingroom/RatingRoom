@@ -11,7 +11,6 @@ import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -41,12 +40,12 @@ class AuthRepository @Inject constructor(
     // ---------- Sign In ----------
     suspend fun signIn(email: String, password: String): Result<FirebaseUser> {
         return runCatching {
-            authRemoteDataSource.signIn(email.trim(), password)
+            authRemoteDataSource.signIn(email, password)
                 ?: error("No se pudo iniciar sesión.")
         }.mapErrorAuth()
     }
 
-    // ---------- Sign Up (Auth + Firestore con rollback si falla Firestore) ----------
+    // ---------- Sign Up ----------
     suspend fun signUp(
         email: String,
         password: String,
@@ -55,31 +54,22 @@ class AuthRepository @Inject constructor(
         birthYear: String? = null
     ): Result<FirebaseUser> {
         return runCatching {
-            // 1) Crear usuario en Firebase Auth
-            val normalizedEmail = email.trim().lowercase()
+            // 1) Crear usuario en Auth
             val user = authRemoteDataSource.signUp(
-                email = normalizedEmail,
+                email = email,
                 password = password,
                 displayName = displayName
             ) ?: error("No se pudo crear la cuenta.")
 
-            // 2) Crear documento del usuario en Firestore
-            //    Importante: si falla, se hace rollback del usuario en Auth para no dejar huérfanos.
-            try {
-                firestoreDataSource.createUserDocument(
-                    userId = user.uid,
-                    email = normalizedEmail,
-                    fullName = displayName,
-                    favoriteGenre = favoriteGenre,
-                    birthYear = birthYear
-                )
-            } catch (firestoreError: Throwable) {
-                // Rollback: borrar usuario creado en Auth
-                try { user.delete().await() } catch (_: Throwable) { /* ignorar */ }
-                throw firestoreError
-            }
+            // 2) Crear documento en Firestore
+            firestoreDataSource.createUserDocument(
+                userId = user.uid,
+                email = email,
+                fullName = displayName,
+                favoriteGenre = favoriteGenre,
+                birthYear = birthYear
+            )
 
-            // 3) Éxito total
             user
         }.mapErrorAuth()
     }
@@ -87,7 +77,7 @@ class AuthRepository @Inject constructor(
     // ---------- Password Reset ----------
     suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
         return runCatching {
-            authRemoteDataSource.sendPasswordResetEmail(email.trim())
+            authRemoteDataSource.sendPasswordResetEmail(email)
         }.mapErrorAuth()
     }
 
@@ -103,14 +93,14 @@ class AuthRepository @Inject constructor(
         profileImageUrl: String? = null
     ): Result<Unit> {
         return runCatching {
-            // Cambios en Firebase Auth si aplica
+            // Cambios en Firebase Auth
             displayName?.let { authRemoteDataSource.updateDisplayName(it) }
-            email?.let { authRemoteDataSource.updateUserEmail(it.trim()) }
+            email?.let { authRemoteDataSource.updateUserEmail(it) }
 
-            // Cambios en Firestore (solo campos no nulos)
+            // Cambios en Firestore
             firestoreDataSource.updateUserProfile(
                 displayName = displayName,
-                email = email?.trim(),
+                email = email,
                 biography = biography,
                 location = location,
                 favoriteGenre = favoriteGenre,
@@ -121,7 +111,7 @@ class AuthRepository @Inject constructor(
         }.mapErrorAuth()
     }
 
-    // ---------- Perfil ----------
+    // ---------- Perfil: "Mi perfil" ----------
     suspend fun getUserProfile(): Result<UserProfile> {
         return runCatching {
             val user = currentUser ?: error("No hay usuario autenticado.")
@@ -144,13 +134,38 @@ class AuthRepository @Inject constructor(
                     updatedAt = profileData["updatedAt"] as? Long
                 )
             } else {
-                // Si no hay doc en Firestore, al menos devolvemos lo básico de Auth
                 UserProfile(
                     uid = user.uid,
                     email = user.email ?: "",
                     fullName = user.displayName
                 )
             }
+        }.mapErrorAuth()
+    }
+
+    // ---------- Perfil: "Ver otro usuario" por ID ----------
+    suspend fun getUserProfileById(userId: String): Result<UserProfile> {
+        return runCatching {
+            val profileData = firestoreDataSource.getUserProfileById(userId)
+                ?: error("Usuario no encontrado.")
+
+            val email = profileData["email"] as? String ?: ""
+            val profileImageUrl = profileData["profileImageUrl"] as? String
+
+            UserProfile(
+                uid = userId,
+                email = email,
+                fullName = profileData["fullName"] as? String,
+                favoriteGenre = profileData["favoriteGenre"] as? String,
+                birthYear = profileData["birthYear"] as? String,
+                biography = profileData["biography"] as? String,
+                location = profileData["location"] as? String,
+                birthdate = profileData["birthdate"] as? String,
+                website = profileData["website"] as? String,
+                profileImageUrl = profileImageUrl,
+                createdAt = profileData["createdAt"] as? Long,
+                updatedAt = profileData["updatedAt"] as? Long
+            )
         }.mapErrorAuth()
     }
 
@@ -164,7 +179,7 @@ class AuthRepository @Inject constructor(
     }
 }
 
-/** Mapea excepciones comunes de Auth/Network a Result con mensajes amigables */
+/** Mapeo de errores comunes de Firebase a mensajes legibles */
 private fun <T> Result<T>.mapErrorAuth(): Result<T> {
     return fold(
         onSuccess = { Result.success(it) },

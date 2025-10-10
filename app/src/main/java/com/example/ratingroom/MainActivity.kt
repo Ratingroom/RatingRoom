@@ -36,6 +36,7 @@ import com.example.ratingroom.ui.screens.moviedetail.MovieDetailRoute
 import com.example.ratingroom.ui.screens.profile.EditProfileScreen
 import com.example.ratingroom.ui.screens.profile.ProfileScreen
 import com.example.ratingroom.ui.screens.profile.ProfileViewModel
+import com.example.ratingroom.ui.screens.friends.FriendRoute // ⬅️ NUEVO
 import com.example.ratingroom.ui.screens.register.RegisterScreen
 import com.example.ratingroom.ui.screens.reviews.ReviewsScreen
 import com.example.ratingroom.ui.screens.settings.SettingsScreen
@@ -46,19 +47,22 @@ import com.example.ratingroom.ui.utils.ModernNavigationDrawer
 import com.example.ratingroom.ui.utils.ModernTopBar
 import dagger.hilt.android.AndroidEntryPoint
 
+// 👇 UID fijo del perfil a mostrar (documento en /users/<UID>)
+private const val TEST_USER_ID = "B17bRz4lPlVW2Tn2lVOuGj3P2RY2"
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
-        // Obtener el estado de autenticación pasado desde SplashActivity
+
+        // Estado de autenticación pasado desde SplashActivity
         val isUserLoggedIn = intent.getBooleanExtra(SplashActivity.EXTRA_IS_USER_LOGGED_IN, false)
-        
-        setContent { 
-            RatingRoomTheme { 
-                RatingRoomApp(isUserLoggedIn = isUserLoggedIn) 
-            } 
+
+        setContent {
+            RatingRoomTheme {
+                RatingRoomApp(isUserLoggedIn = isUserLoggedIn)
+            }
         }
     }
 }
@@ -70,30 +74,26 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Usar el MainViewModel para manejar el estado de la UI
+    // VM principal
     val mainViewModel: MainViewModel = hiltViewModel()
     val mainUiState by mainViewModel.uiState.collectAsState()
-    
-    // Obtener datos del usuario para el drawer
+
+    // Datos del usuario para drawer/topbar
     val profileViewModel: ProfileViewModel = hiltViewModel()
     val profileUiState by profileViewModel.uiState.collectAsState()
-    
-    // Recargar perfil cuando cambia la ruta desde login a otra pantalla
+
+    // Recargar perfil al salir de pantallas de auth
     LaunchedEffect(currentRoute) {
-        if (currentRoute != Screen.Login.route && 
-            currentRoute != Screen.Register.route && 
+        if (
+            currentRoute != Screen.Login.route &&
+            currentRoute != Screen.Register.route &&
             currentRoute != Screen.ForgotPassword.route &&
             profileUiState.profileData == null &&
-            !profileUiState.isLoading) {
-            println("MainActivity: Ruta cambió a $currentRoute, recargando perfil...")
+            !profileUiState.isLoading
+        ) {
             profileViewModel.loadProfile()
         }
     }
-    
-    // Debug: Verificar qué datos tiene el profileUiState
-    println("MainActivity: profileUiState.profileData = ${profileUiState.profileData}")
-    println("MainActivity: isLoading = ${profileUiState.isLoading}")
-    println("MainActivity: errorMessage = ${profileUiState.errorMessage}")
 
     val navigateToScreen: (String) -> Unit = { route ->
         navController.navigate(route) { launchSingleTop = true }
@@ -101,34 +101,28 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
     }
 
     val navigateBack: () -> Unit = {
-        println("MainActivity: navigateBack() iniciado")
         val popped = navController.popBackStack()
-        println("MainActivity: popBackStack() resultado: $popped")
         if (!popped) {
-            println("MainActivity: No se pudo hacer pop, navegando a MainMenu")
             navController.navigate(Screen.MainMenu.route) {
                 popUpTo(navController.graph.startDestinationId) { inclusive = true }
             }
         }
         mainViewModel.updateDrawerState(false)
-        println("MainActivity: navigateBack() completado")
     }
 
-    // Determinar si mostrar drawer y topbar basado en la ruta actual
     val isAuthScreen = mainViewModel.isAuthScreen(currentRoute ?: "")
-    
     val showTopBar = !isAuthScreen
     val showDrawer = !isAuthScreen
-
-    // Obtener el título de la pantalla actual usando el ViewModel
     val currentTitle = mainViewModel.getCurrentTitle(currentRoute ?: "")
 
     GradientBackground {
-        Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars.only(
-            WindowInsetsSides.Horizontal)) ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
+        ) {
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
-
                 topBar = {
                     if (showTopBar) {
                         ModernTopBar(
@@ -139,16 +133,12 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                     }
                 },
                 containerColor = Color.Transparent,
-                contentWindowInsets = WindowInsets(0,0,0,0)
+                contentWindowInsets = WindowInsets(0, 0, 0, 0)
             ) { innerPadding ->
 
-                // Determinar la pantalla inicial basada en el estado de autenticación
-                val startDestination = if (isUserLoggedIn) {
-                    Screen.MainMenu.route
-                } else {
-                    Screen.Login.route
-                }
-                
+                val startDestination =
+                    if (isUserLoggedIn) Screen.MainMenu.route else Screen.Login.route
+
                 NavHost(
                     navController = navController,
                     startDestination = startDestination,
@@ -158,8 +148,6 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                     composable(Screen.Login.route) {
                         LoginScreen(
                             onLoginClick = { _, _ ->
-                                // Solo navegar si el login fue exitoso
-                                // El LoginViewModel ya maneja la validación con Firebase
                                 navController.navigate(Screen.MainMenu.route) {
                                     popUpTo(Screen.Login.route) { inclusive = true }
                                 }
@@ -170,19 +158,11 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                     }
                     composable(Screen.Register.route) {
                         RegisterScreen(
-                            onRegisterClick = { _, _, _, _, _, _ -> 
-                                println("MainActivity: onRegisterClick ejecutado, llamando navigateBack()")
+                            onRegisterClick = { _, _, _, _, _, _ ->
                                 navigateBack()
-                                println("MainActivity: navigateBack() ejecutado")
                             },
-                            onLoginClick = { 
-                                println("MainActivity: onLoginClick ejecutado")
-                                navigateBack() 
-                            },
-                            onBackClick = { 
-                                println("MainActivity: onBackClick ejecutado")
-                                navigateBack() 
-                            }
+                            onLoginClick = { navigateBack() },
+                            onBackClick = { navigateBack() }
                         )
                     }
                     composable(Screen.ForgotPassword.route) {
@@ -201,7 +181,7 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
 
                     composable(Screen.Profile.route) {
                         ProfileScreen(
-                            onBackClick = { /* no se usa; top bar global */ },
+                            onBackClick = { /* handled by top bar global */ },
                             onEditClick = { navigateToScreen(Screen.EditProfile.route) },
                             onLogoutClick = {
                                 navController.navigate(Screen.Login.route) {
@@ -214,15 +194,25 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                     composable(Screen.EditProfile.route) {
                         EditProfileScreen(
                             onSave = { navigateBack() },
-                            onBackClick = { navigateBack() } // flecha atrás dentro de la pantalla
+                            onBackClick = { navigateBack() }
                         )
                     }
 
-                    composable(Screen.Friends.route) { FriendsScreen(onBack = navigateBack) }
+                    // Friends -> SIEMPRE abre el perfil fijo TEST_USER_ID
+                    composable(Screen.Friends.route) {
+                        FriendsScreen(
+                            onBack = navigateBack,
+                            onUserClick = { _ ->
+                                navigateToScreen(Screen.Friend.createRoute(TEST_USER_ID))
+                            }
+                        )
+                    }
 
                     composable(Screen.List.route) {
                         ListScreen(
-                            onMovieClick = { movieId -> navigateToScreen(Screen.MovieDetail.createRoute(movieId)) }
+                            onMovieClick = { movieId ->
+                                navigateToScreen(Screen.MovieDetail.createRoute(movieId))
+                            }
                         )
                     }
 
@@ -231,7 +221,9 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                     composable(Screen.Favorites.route) {
                         FavoritesScreen(
                             onBack = navigateBack,
-                            onMovieClick = { movieId -> navigateToScreen(Screen.MovieDetail.createRoute(movieId)) }
+                            onMovieClick = { movieId ->
+                                navigateToScreen(Screen.MovieDetail.createRoute(movieId))
+                            }
                         )
                     }
 
@@ -252,6 +244,15 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                         val movieId = backStackEntry.arguments?.getInt("movieId") ?: 0
                         SynopsisScreen(movieId = movieId, onBackClick = navigateBack)
                     }
+
+                    // ---------- FRIEND (perfil de otro usuario) ----------
+                    composable(
+                        route = Screen.Friend.route, // "friend/{userId}"
+                        arguments = listOf(navArgument("userId") { type = NavType.StringType })
+                    ) { backStackEntry ->
+                        val uid = backStackEntry.arguments?.getString("userId") ?: return@composable
+                        FriendRoute(userId = uid, onBack = navigateBack)
+                    }
                 }
             }
 
@@ -262,9 +263,7 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                     currentRoute = currentRoute,
                     onNavigate = { route -> navigateToScreen(route) },
                     onLogout = {
-                        // Cerrar sesión usando el ProfileViewModel
                         profileViewModel.logout()
-                        // Navegar a la pantalla de login
                         navController.navigate(Screen.Login.route) {
                             popUpTo(0) { inclusive = true }
                         }
