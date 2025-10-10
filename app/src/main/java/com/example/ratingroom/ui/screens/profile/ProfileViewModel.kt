@@ -3,10 +3,13 @@ package com.example.ratingroom.ui.screens.profile
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+
 import com.example.ratingroom.data.dtos.UserDto
 import com.example.ratingroom.repository.AuthRepository
 import com.example.ratingroom.repository.ReviewRepository
+import com.example.ratingroom.data.remote.RetrofitClient
 import com.example.ratingroom.repository.UserProfile
+
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,14 +25,14 @@ class ProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository
 ) : ViewModel() {
 
-    // ID de usuario quemado para obtener datos de REST API
+    // Mantenemos el repositorio REST para las reseñas por ahora
     private val HARDCODED_USER_ID = 2
 
     private val _uiState = MutableStateFlow(ProfileUIState(isLoading = false))
     val uiState: StateFlow<ProfileUIState> = _uiState.asStateFlow()
 
     init {
-        loadProfile(HARDCODED_USER_ID)
+        loadProfile()
     }
 
     fun loadProfile(userId: Int = HARDCODED_USER_ID) {
