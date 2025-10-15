@@ -15,8 +15,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,47 +42,94 @@ fun EditProfileScreen(
     viewModel: EditProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    
-    // Efecto para navegar cuando el guardado se completa exitosamente
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
     LaunchedEffect(uiState.saveCompleted) {
         if (uiState.saveCompleted) {
-            // Navegar solo cuando el guardado se ha completado
+            snackbarHostState.showSnackbar("Perfil actualizado")
             onSave()
-            // Limpiar el estado para evitar navegaciones repetidas
             viewModel.clearMessages()
         }
     }
-    
-    // Estado para controlar si estamos esperando que termine la subida de imagen
+
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearMessages()
+        }
+    }
+
     var isWaitingForImageUpload by remember { mutableStateOf(false) }
-    
-    // Estado para controlar la visibilidad del diálogo de confirmación
     var showConfirmDialog by remember { mutableStateOf(false) }
-    
-    // Launcher para seleccionar imagen de la galería
+
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        uri?.let { 
-            println("URI seleccionada en EditProfileScreen: $it")
-            println("URI scheme: ${it.scheme}, path: ${it.path}")
+        uri?.let {
             viewModel.onProfileImageSelected(it)
-            // Marcar que estamos esperando la subida de imagen
             isWaitingForImageUpload = true
-            // Guardar automáticamente cuando se selecciona una imagen
             viewModel.saveProfile()
-            // La navegación se manejará en el LaunchedEffect cuando se complete
         }
     }
-    
-    // Efecto para resetear el estado de espera cuando se completa o falla la subida
+
     LaunchedEffect(uiState.isSaving, uiState.saveCompleted, uiState.errorMessage) {
         if (isWaitingForImageUpload && (!uiState.isSaving || uiState.saveCompleted || uiState.errorMessage != null)) {
             isWaitingForImageUpload = false
         }
     }
 
-    // Diálogo de confirmación para salir sin guardar
+    val handleBackClick = {
+        if (!(isWaitingForImageUpload || uiState.isSaving)) {
+            if (uiState.profileImageUri != null && !uiState.isSaving) {
+                isWaitingForImageUpload = true
+                viewModel.saveProfile()
+            } else {
+                showConfirmDialog = true
+            }
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            EditProfileScreenContent(
+                uiState = uiState,
+                onDisplayNameChange = viewModel::onDisplayNameChange,
+                onEmailChange = viewModel::onEmailChange,
+                onBiographyChange = viewModel::onBiographyChange,
+                onLocationChange = viewModel::onLocationChange,
+                onFavoriteGenreChange = viewModel::onFavoriteGenreChange,
+                onBirthdateChange = viewModel::onBirthdateChange,
+                onWebsiteChange = viewModel::onWebsiteChange,
+                onSelectImage = { galleryLauncher.launch("image/*") },
+                onSave = {
+                    if (!isWaitingForImageUpload && !uiState.isSaving) {
+                        viewModel.saveProfile()
+                    }
+                },
+                onBackClick = handleBackClick,
+                modifier = modifier
+            )
+
+            if (uiState.isSaving) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+        }
+    }
+
     if (showConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showConfirmDialog = false },
@@ -96,56 +141,13 @@ fun EditProfileScreen(
                         showConfirmDialog = false
                         onBackClick()
                     }
-                ) {
-                    Text("Salir")
-                }
+                ) { Text("Salir") }
             },
             dismissButton = {
-                TextButton(
-                    onClick = { showConfirmDialog = false }
-                ) {
-                    Text("Cancelar")
-                }
+                TextButton(onClick = { showConfirmDialog = false }) { Text("Cancelar") }
             }
         )
     }
-
-    val handleBackClick = {
-        // Si estamos esperando que termine la subida de imagen, no permitir navegación
-        if (!(isWaitingForImageUpload || uiState.isSaving)) {
-
-            if (uiState.profileImageUri != null && !uiState.isSaving) {
-                isWaitingForImageUpload = true
-                viewModel.saveProfile()
-
-            } else {
-
-                showConfirmDialog = true
-            }
-        }
-
-    }
-    
-    EditProfileScreenContent(
-        uiState = uiState,
-        onDisplayNameChange = viewModel::onDisplayNameChange,
-        onEmailChange = viewModel::onEmailChange,
-        onBiographyChange = viewModel::onBiographyChange,
-        onLocationChange = viewModel::onLocationChange,
-        onFavoriteGenreChange = viewModel::onFavoriteGenreChange,
-        onBirthdateChange = viewModel::onBirthdateChange,
-        onWebsiteChange = viewModel::onWebsiteChange,
-        onSelectImage = { galleryLauncher.launch("image/*") },
-        onSave = {
-            // Si no estamos esperando una subida de imagen, proceder normalmente
-            if (!isWaitingForImageUpload && !uiState.isSaving) {
-                viewModel.saveProfile()
-                // La navegación se manejará en el LaunchedEffect cuando se complete
-            }
-        },
-        onBackClick = handleBackClick,
-        modifier = modifier
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -174,7 +176,6 @@ fun EditProfileScreenContent(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            // Header SOLO con flecha atrás (SIN LOGO)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -190,7 +191,6 @@ fun EditProfileScreenContent(
 
             Spacer(Modifier.height(16.dp))
 
-            // FOTO DE PERFIL
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
@@ -243,7 +243,6 @@ fun EditProfileScreenContent(
 
             Spacer(Modifier.height(24.dp))
 
-            // INFORMACIÓN PERSONAL
             SectionCard(title = stringResource(id = R.string.personal_info_title)) {
                 TextInputField(
                     value = uiState.displayName,
@@ -282,7 +281,6 @@ fun EditProfileScreenContent(
 
             Spacer(Modifier.height(16.dp))
 
-            // PREFERENCIAS
             SectionCard(title = stringResource(id = R.string.preferences_title)) {
                 DropdownField(
                     value = uiState.favoriteGenre,
@@ -313,11 +311,13 @@ fun EditProfileScreenContent(
             Spacer(Modifier.height(32.dp))
 
             CustomButton(
-                text = stringResource(id = R.string.save_changes),
-                onClick = onSave,
+                text = if (uiState.isSaving) "Guardando..." else stringResource(id = R.string.save_changes),
+                onClick = { if (!uiState.isSaving) onSave() },
                 backgroundColor = cs.primary,
                 textColor = cs.onPrimary,
-                modifier = Modifier.height(56.dp)
+                modifier = Modifier
+                    .height(56.dp)
+                    .fillMaxWidth()
             )
         }
     }

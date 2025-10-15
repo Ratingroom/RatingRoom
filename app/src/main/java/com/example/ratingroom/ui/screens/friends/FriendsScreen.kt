@@ -1,6 +1,7 @@
 package com.example.ratingroom.ui.screens.friends
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,6 +33,7 @@ import com.example.ratingroom.data.models.FriendshipType
 @Composable
 fun FriendsScreen(
     onBack: () -> Unit = {},
+    onUserClick: (String) -> Unit,                 // 👈 nuevo parámetro expuesto
     modifier: Modifier = Modifier,
     viewModel: FriendsViewModel = hiltViewModel()
 ) {
@@ -42,6 +44,7 @@ fun FriendsScreen(
         onSearchQueryChange = viewModel::onSearchQueryChange,
         onTabSelected = viewModel::onTabSelected,
         onFriendAction = { friend, action -> viewModel.onFriendAction(friend.id, action) },
+        onUserClick = onUserClick,                 // 👈 propagamos
         modifier = modifier
     )
 }
@@ -53,6 +56,7 @@ fun FriendsScreenContent(
     onSearchQueryChange: (String) -> Unit,
     onTabSelected: (Int) -> Unit,
     onFriendAction: (Friend, String) -> Unit,
+    onUserClick: (String) -> Unit,                 // 👈 nuevo
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -82,7 +86,7 @@ fun FriendsScreenContent(
             }
         }
 
-        // Contenido principal (FONDO: background del tema, no blanco)
+        // Contenido principal
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,
@@ -114,6 +118,7 @@ fun FriendsScreenContent(
                         ActivityTab(
                             searchQuery = uiState.searchQuery,
                             onFriendAction = onFriendAction,
+                            onUserClick = onUserClick,      // 👈 propagamos
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -123,6 +128,7 @@ fun FriendsScreenContent(
                             searchQuery = uiState.searchQuery,
                             friends = emptyList(),
                             onFriendAction = onFriendAction,
+                            onUserClick = onUserClick,      // 👈 propagamos
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -198,6 +204,7 @@ fun FriendsTabRow(
 fun ActivityTab(
     searchQuery: String,
     onFriendAction: (Friend, String) -> Unit,
+    onUserClick: (String) -> Unit,                // 👈 nuevo
     modifier: Modifier = Modifier
 ) {
     val friendsActivity = remember { FriendsRepository.getFriendsActivity() }
@@ -227,10 +234,17 @@ fun ActivityTab(
             }
         } else {
             items(filteredActivity) { activity ->
-                FriendActivityCard(
-                    activity = activity,
-                    onAction = { action -> onFriendAction(activity.friend, action) }
-                )
+                // 👇 sin tocar el composable interno: hacemos clickable toda la tarjeta
+                Box(
+                    modifier = Modifier.clickable {
+                        onUserClick(activity.friend.id.toString())
+                    }
+                ) {
+                    FriendActivityCard(
+                        activity = activity,
+                        onAction = { action -> onFriendAction(activity.friend, action) }
+                    )
+                }
             }
         }
     }
@@ -242,6 +256,7 @@ fun FriendsListTab(
     searchQuery: String,
     friends: List<Friend>,
     onFriendAction: (Friend, String) -> Unit,
+    onUserClick: (String) -> Unit,                // 👈 nuevo
     modifier: Modifier = Modifier
 ) {
     val friendsList = remember(friends, searchQuery) {
@@ -272,7 +287,8 @@ fun FriendsListTab(
             items(friendsList) { friend ->
                 FriendCard(
                     friend = friend,
-                    onAction = { action -> onFriendAction(friend, action) }
+                    onAction = { action -> onFriendAction(friend, action) },
+                    onUserClick = onUserClick
                 )
             }
         }
@@ -293,7 +309,8 @@ fun PreviewFriendsScreen() {
             ),
             onSearchQueryChange = {},
             onTabSelected = {},
-            onFriendAction = { _, _ -> }
+            onFriendAction = { _, _ -> },
+            onUserClick = {}
         )
     }
 }
@@ -302,6 +319,7 @@ fun PreviewFriendsScreen() {
 fun FriendCard(
     friend: Friend,
     onAction: (String) -> Unit,
+    onUserClick: (String) -> Unit,               // 👈 ya estaba en nuestra versión previa
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
@@ -429,7 +447,8 @@ fun FriendCard(
                     }
                 }
 
-                IconButton(onClick = { onAction("view_profile") }) {
+                // Navega al perfil del amigo
+                IconButton(onClick = { onUserClick(friend.id.toString()) }) {
                     Icon(
                         Icons.Default.Person,
                         contentDescription = "Ver perfil",

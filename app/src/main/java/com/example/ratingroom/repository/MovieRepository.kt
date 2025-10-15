@@ -227,17 +227,31 @@ object MovieRepository {
     }
 
     suspend fun getMovieById(id: Int): Movie? = withContext(Dispatchers.IO) {
-        val root = try {
-            api.getPeliculaRaw(id)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error /api/peliculas/$id: ${e.message}", e)
-            return@withContext null
-        }
-        val obj = asObjectFlexible(root)
-        return@withContext try {
+        // Intento directo al endpoint de detalle
+        val direct: Movie? = try {
+            val root = api.getPeliculaRaw(id)
+            val obj = asObjectFlexible(root)
             mapMovie(obj)
         } catch (e: Exception) {
-            Log.e(TAG, "Error mapeando detalle: ${e.message}", e)
+            Log.e(TAG, "Error /api/peliculas/$id: ${e.message}", e)
+            null
+        }
+
+        // Si el resultado directo es válido (tiene título), úsalo
+        if (direct != null && direct.title.isNotBlank()) return@withContext direct
+
+        // Fallback: buscar en la lista general por id
+        return@withContext try {
+            val all = getAllMovies()
+            val fromList = all.firstOrNull { it.id == id }
+            if (fromList == null) {
+                Log.w(TAG, "Fallback: película $id no encontrada en lista")
+            } else {
+                Log.d(TAG, "Fallback: película $id encontrada en lista")
+            }
+            fromList
+        } catch (e: Exception) {
+            Log.e(TAG, "Error en fallback getAllMovies: ${e.message}", e)
             null
         }
     }

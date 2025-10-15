@@ -30,6 +30,7 @@ class EditProfileViewModel @Inject constructor(
         loadCurrentProfile()
     }
 
+    /** Carga el perfil actual desde Firestore y pre-llena el formulario. */
     private fun loadCurrentProfile() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
@@ -38,12 +39,14 @@ class EditProfileViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         displayName = userProfile.fullName ?: "",
-                        email = userProfile.email,
+                        email = userProfile.email, // viene de Auth/Firestore
                         biography = userProfile.biography ?: "",
                         location = userProfile.location ?: "",
                         favoriteGenre = userProfile.favoriteGenre ?: "",
                         birthdate = userProfile.birthdate ?: "",
-                        website = userProfile.website ?: ""
+                        website = userProfile.website ?: "",
+                        // para previsualización si ya hay imagen en profile
+                        profileImageUri = userProfile.profileImageUrl
                     )
                 }
                 .onFailure { e ->
@@ -55,58 +58,43 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
+    /* -------------------- Handlers de formulario -------------------- */
+
     fun onDisplayNameChange(displayName: String) {
-        _uiState.value = _uiState.value.copy(
-            displayName = displayName,
-            errorMessage = null
-        )
+        _uiState.value = _uiState.value.copy(displayName = displayName, errorMessage = null)
     }
 
     fun onEmailChange(email: String) {
-        _uiState.value = _uiState.value.copy(
-            email = email,
-            errorMessage = null
-        )
+        _uiState.value = _uiState.value.copy(email = email, errorMessage = null)
     }
 
     fun onBiographyChange(biography: String) {
-        _uiState.value = _uiState.value.copy(
-            biography = biography,
-            errorMessage = null
-        )
+        _uiState.value = _uiState.value.copy(biography = biography, errorMessage = null)
     }
 
     fun onLocationChange(location: String) {
-        _uiState.value = _uiState.value.copy(
-            location = location,
-            errorMessage = null
-        )
+        _uiState.value = _uiState.value.copy(location = location, errorMessage = null)
     }
 
     fun onFavoriteGenreChange(favoriteGenre: String) {
-        _uiState.value = _uiState.value.copy(
-            favoriteGenre = favoriteGenre,
-            errorMessage = null
-        )
+        _uiState.value = _uiState.value.copy(favoriteGenre = favoriteGenre, errorMessage = null)
     }
 
     fun onBirthdateChange(birthdate: String) {
-        _uiState.value = _uiState.value.copy(
-            birthdate = birthdate,
-            errorMessage = null
-        )
+        _uiState.value = _uiState.value.copy(birthdate = birthdate, errorMessage = null)
     }
 
+    fun onWebsiteChange(website: String) {
+        _uiState.value = _uiState.value.copy(website = website, errorMessage = null)
+    }
+
+    /** Guarda en estado un URI (String) para previsualización y subida. */
     fun onProfileImageSelected(uri: Uri) {
         println("Imagen seleccionada en onProfileImageSelected: $uri")
-        val uriString = uri.toString()
-        println("URI convertida a String: $uriString")
-        _uiState.value = _uiState.value.copy(
-            profileImageUri = uriString,
-            errorMessage = null
-        )
-        println("Estado actualizado con profileImageUri: ${_uiState.value.profileImageUri}")
+        _uiState.value = _uiState.value.copy(profileImageUri = uri.toString(), errorMessage = null)
     }
+
+    /* -------------------- Storage: subir imagen -------------------- */
 
     private suspend fun uploadProfileImage(uri: Uri): String? {
         return withContext(NonCancellable + Dispatchers.IO) {
@@ -116,42 +104,20 @@ class EditProfileViewModel @Inject constructor(
                 println("uploadProfileImage: Usuario autenticado: ${user.uid}")
 
                 if (uri.scheme == null) {
-                    println("uploadProfileImage: ERROR - URI inválida: no tiene scheme")
                     throw IllegalArgumentException("URI inválida: no tiene scheme")
                 }
 
-                println("uploadProfileImage: URI a subir: $uri")
-                println("uploadProfileImage: URI scheme: ${uri.scheme}, path: ${uri.path}")
-
                 val fileRef = storage.reference.child("profile_images/${user.uid}/${UUID.randomUUID()}.jpg")
-                println("uploadProfileImage: Referencia de archivo creada: ${fileRef.path}")
+                println("uploadProfileImage: putFile() -> ${fileRef.path}")
+                val uploadTask = fileRef.putFile(uri).await()
+                println("uploadProfileImage: Subido OK, bytes: ${uploadTask.bytesTransferred}")
 
-                println("uploadProfileImage: Iniciando putFile...")
-                try {
-                    println("uploadProfileImage: Ejecutando putFile y esperando resultado...")
-                    val uploadTask = fileRef.putFile(uri).await()
-                    println("uploadProfileImage: Archivo subido exitosamente, bytes transferidos: ${uploadTask.bytesTransferred}")
-                    println("uploadProfileImage: Obteniendo URL de descarga...")
-
-                    val downloadUrl = fileRef.downloadUrl.await()
-                    val downloadUrlString = downloadUrl.toString()
-                    println("uploadProfileImage: URL de descarga obtenida: $downloadUrlString")
-
-                    if (downloadUrlString.isEmpty()) {
-                        println("uploadProfileImage: ADVERTENCIA - URL de descarga está vacía")
-                        throw IllegalStateException("La URL de descarga está vacía")
-                    }
-
-                    downloadUrlString
-                } catch (e: Exception) {
-                    println("uploadProfileImage: ERROR específico en putFile o downloadUrl: ${e.message}")
-                    println("uploadProfileImage: Stacktrace del error:")
-                    e.printStackTrace()
-                    throw e
-                }
+                val downloadUrl = fileRef.downloadUrl.await().toString()
+                if (downloadUrl.isEmpty()) throw IllegalStateException("La URL de descarga está vacía")
+                println("uploadProfileImage: URL => $downloadUrl")
+                downloadUrl
             } catch (e: Exception) {
-                println("uploadProfileImage: ERROR general al subir imagen: ${e.message}")
-                println("uploadProfileImage: Stacktrace del error general:")
+                println("uploadProfileImage: ERROR -> ${e.message}")
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(
@@ -163,103 +129,72 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
-    fun onWebsiteChange(website: String) {
-        _uiState.value = _uiState.value.copy(
-            website = website,
-            errorMessage = null
-        )
-    }
+    /* -------------------- Guardar perfil (Firestore + Auth) -------------------- */
 
     fun saveProfile() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSaving = true, errorMessage = null)
+            _uiState.value = _uiState.value.copy(isSaving = true, errorMessage = null, successMessage = null)
             println("SaveProfile: Iniciando guardado del perfil")
 
             try {
                 val currentState = _uiState.value
 
+                // Validaciones mínimas
                 when {
                     currentState.displayName.isBlank() -> {
-                        _uiState.value = _uiState.value.copy(
-                            isSaving = false,
-                            errorMessage = "El nombre para mostrar es requerido"
-                        )
-                        println("SaveProfile: Error - El nombre no puede estar vacío")
+                        _uiState.value = _uiState.value.copy(isSaving = false, errorMessage = "El nombre para mostrar es requerido")
                         return@launch
                     }
                     currentState.email.isBlank() || !currentState.email.contains("@") -> {
-                        _uiState.value = _uiState.value.copy(
-                            isSaving = false,
-                            errorMessage = "Email inválido"
-                        )
-                        println("SaveProfile: Error - Email inválido")
+                        _uiState.value = _uiState.value.copy(isSaving = false, errorMessage = "Email inválido")
                         return@launch
                     }
                 }
 
-                // Subir imagen si hay una seleccionada
+                // Subir imagen si hay nueva seleccionada (URI con scheme content:// o file://)
                 var profileImageUrl: String? = null
-                println("SaveProfile: Verificando si hay imagen para subir")
-                println("SaveProfile: profileImageUri = ${currentState.profileImageUri}")
-
-                if (currentState.profileImageUri != null) {
-                    println("SaveProfile: Procesando URI: ${currentState.profileImageUri}")
-                    try {
-                        val uri = Uri.parse(currentState.profileImageUri)
-                        println("SaveProfile: URI parseada correctamente: $uri")
-                        println("SaveProfile: URI scheme: ${uri.scheme}, path: ${uri.path}")
-
-                        if (uri.scheme == null || uri.path == null) {
-                            println("SaveProfile: ERROR: URI inválida, no tiene scheme o path")
-                            _uiState.value = _uiState.value.copy(
-                                isSaving = false,
-                                errorMessage = "URI de imagen inválida"
-                            )
-                            return@launch
-                        }
-
-                        println("SaveProfile: URI válido, subiendo imagen...")
-                        val uploadedImageUrl = uploadProfileImage(uri)
-
-                        if (!uploadedImageUrl.isNullOrEmpty()) {
-                            println("SaveProfile: URL de imagen obtenida correctamente: $uploadedImageUrl")
-                            profileImageUrl = uploadedImageUrl
-                        } else {
-                            println("SaveProfile: ADVERTENCIA - No se pudo obtener URL de imagen")
+                val selectedUriStr = currentState.profileImageUri
+                if (!selectedUriStr.isNullOrBlank()) {
+                    // Si lo que hay es una URL http(s) previa, no la resubimos
+                    val isHttp = selectedUriStr.startsWith("http://") || selectedUriStr.startsWith("https://")
+                    if (!isHttp) {
+                        val uri = Uri.parse(selectedUriStr)
+                        profileImageUrl = uploadProfileImage(uri)
+                        if (profileImageUrl.isNullOrEmpty()) {
                             _uiState.value = _uiState.value.copy(
                                 isSaving = false,
                                 errorMessage = "No se pudo obtener la URL de la imagen"
                             )
                             return@launch
                         }
-
-                        println("SaveProfile: URL de imagen después de subir: $profileImageUrl")
-                    } catch (e: Exception) {
-                        println("SaveProfile: Error al procesar URI: ${e.message}")
-                        e.printStackTrace()
-                        _uiState.value = _uiState.value.copy(
-                            isSaving = false,
-                            errorMessage = "Error al procesar la imagen: ${e.message}"
-                        )
-                        return@launch
+                    } else {
+                        // Ya había URL remota, no hay nueva imagen — no actualizar
+                        profileImageUrl = null
                     }
-                } else {
-                    println("SaveProfile: No hay imagen seleccionada para subir")
                 }
 
-                // Guardar perfil usando AuthRepository (ahora retorna Result<Unit>)
-                println("Actualizando perfil con profileImageUrl: $profileImageUrl")
+                // Evitar re-login innecesario: solo actualiza email si cambia
+                val normalizedEmail = currentState.email.trim().lowercase()
+                val currentEmail = authRepository.currentUser?.email?.trim()?.lowercase()
+                val emailToUpdate: String? = if (normalizedEmail.isNotEmpty() && normalizedEmail != currentEmail) {
+                    normalizedEmail
+                } else null
+
+                println("SaveProfile: Actualizando perfil. emailToUpdate=${emailToUpdate ?: "(sin cambio)"}")
+
                 authRepository.updateUserProfile(
                     displayName = currentState.displayName,
-                    email = currentState.email,
+                    email = emailToUpdate,                  // <-- solo si cambió
                     biography = currentState.biography,
                     location = currentState.location,
                     favoriteGenre = currentState.favoriteGenre,
                     birthdate = currentState.birthdate,
                     website = currentState.website,
-                    profileImageUrl = profileImageUrl
+                    profileImageUrl = profileImageUrl       // <-- solo si hay nueva subida
                 )
                     .onSuccess {
+                        // Recarga para reflejar cambios inmediatamente en la UI
+                        loadCurrentProfile()
                         _uiState.value = _uiState.value.copy(
                             isSaving = false,
                             saveCompleted = true,

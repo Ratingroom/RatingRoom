@@ -54,14 +54,14 @@ class AuthRepository @Inject constructor(
         birthYear: String? = null
     ): Result<FirebaseUser> {
         return runCatching {
-            // 1. Crear usuario en Firebase Auth
+            // 1) Crear usuario en Auth
             val user = authRemoteDataSource.signUp(
                 email = email,
                 password = password,
                 displayName = displayName
             ) ?: error("No se pudo crear la cuenta.")
-            
-            // 2. Crear documento del usuario en Firestore
+
+            // 2) Crear documento en Firestore
             firestoreDataSource.createUserDocument(
                 userId = user.uid,
                 email = email,
@@ -69,7 +69,7 @@ class AuthRepository @Inject constructor(
                 favoriteGenre = favoriteGenre,
                 birthYear = birthYear
             )
-            
+
             user
         }.mapErrorAuth()
     }
@@ -93,7 +93,7 @@ class AuthRepository @Inject constructor(
         profileImageUrl: String? = null
     ): Result<Unit> {
         return runCatching {
-            // Cambios en Firebase Auth si aplica
+            // Cambios en Firebase Auth
             displayName?.let { authRemoteDataSource.updateDisplayName(it) }
             email?.let { authRemoteDataSource.updateUserEmail(it) }
 
@@ -111,7 +111,7 @@ class AuthRepository @Inject constructor(
         }.mapErrorAuth()
     }
 
-    // ---------- Perfil ----------
+    // ---------- Perfil: "Mi perfil" ----------
     suspend fun getUserProfile(): Result<UserProfile> {
         return runCatching {
             val user = currentUser ?: error("No hay usuario autenticado.")
@@ -143,6 +143,32 @@ class AuthRepository @Inject constructor(
         }.mapErrorAuth()
     }
 
+    // ---------- Perfil: "Ver otro usuario" por ID ----------
+    suspend fun getUserProfileById(userId: String): Result<UserProfile> {
+        return runCatching {
+            val profileData = firestoreDataSource.getUserProfileById(userId)
+                ?: error("Usuario no encontrado.")
+
+            val email = profileData["email"] as? String ?: ""
+            val profileImageUrl = profileData["profileImageUrl"] as? String
+
+            UserProfile(
+                uid = userId,
+                email = email,
+                fullName = profileData["fullName"] as? String,
+                favoriteGenre = profileData["favoriteGenre"] as? String,
+                birthYear = profileData["birthYear"] as? String,
+                biography = profileData["biography"] as? String,
+                location = profileData["location"] as? String,
+                birthdate = profileData["birthdate"] as? String,
+                website = profileData["website"] as? String,
+                profileImageUrl = profileImageUrl,
+                createdAt = profileData["createdAt"] as? Long,
+                updatedAt = profileData["updatedAt"] as? Long
+            )
+        }.mapErrorAuth()
+    }
+
     // ---------- Utilidades ----------
     fun signOut() {
         authRemoteDataSource.signOut()
@@ -153,7 +179,7 @@ class AuthRepository @Inject constructor(
     }
 }
 
-/** Mapea excepciones de Auth/Network a mensajes específicos dentro de Result */
+/** Mapeo de errores comunes de Firebase a mensajes legibles */
 private fun <T> Result<T>.mapErrorAuth(): Result<T> {
     return fold(
         onSuccess = { Result.success(it) },
@@ -179,5 +205,4 @@ private fun <T> Result<T>.mapErrorAuth(): Result<T> {
             }
         }
     )
-
 }
