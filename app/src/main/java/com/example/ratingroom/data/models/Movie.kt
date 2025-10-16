@@ -27,7 +27,7 @@ data class User(
 )
 
 data class Review(
-    val id: Int,
+    val id: String,
     val movieId: Int,
     val userId: Int,
     val rating: Double,
@@ -35,5 +35,7 @@ data class Review(
     val date: String,
     // 🎯 Información del usuario autor del review
     val userName: String? = null,
-    val userImageUrl: String? = null
+    val userImageUrl: String? = null,
+    val likes: Int = 0,
+    val isLiked: Boolean = false
 )

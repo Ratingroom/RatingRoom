@@ -294,8 +294,8 @@ private fun ReviewsSection(
                 reviews.forEach { r ->
                     ReviewRow(
                         review = r,
-                        onEdit = { rating, text -> onEdit(r.id, rating, text) },
-                        onDelete = { onDelete(r.id) }
+                        onEdit = { rating, text -> onEdit(r.id.toIntOrNull() ?: 0, rating, text) },
+                        onDelete = { onDelete(r.id.toIntOrNull() ?: 0) }
                     )
                 }
             }
@@ -442,8 +442,8 @@ fun ProfileScreenPreview() {
                     profileImageUrl = null
                 ),
                 reviews = listOf(
-                    ReviewDto(id = 1, usuario_id = 1, pelicula_id = 77, rating = 5, texto = "Excelente!"),
-                    ReviewDto(id = 2, usuario_id = 1, pelicula_id = 77, rating = 4, texto = "Muy buena.")
+                    ReviewDto(id = "1", usuario_id = 1, pelicula_id = 77, rating = 5, texto = "Excelente!"),
+                    ReviewDto(id = "2", usuario_id = 1, pelicula_id = 77, rating = 4, texto = "Muy buena.")
                 ),
                 isDarkMode = false,
                 isLoading = false

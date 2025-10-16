@@ -31,6 +31,7 @@ fun ReviewsScreen(
         onBack = onBack,
         onEditReview = { reviewId, rating, texto -> viewModel.editReview(reviewId, rating, texto) },
         onDeleteReview = { reviewId -> viewModel.deleteReview(reviewId) },
+        onLikeClick = { reviewId -> viewModel.sendOrDeleteLike(reviewId, viewModel.getCurrentUserId()) },
         onClearError = viewModel::clearError,
         modifier = modifier
     )
@@ -40,8 +41,9 @@ fun ReviewsScreen(
 fun ReviewsScreenContent(
     uiState: ReviewsUIState,
     onBack: () -> Unit,
-    onEditReview: (Int, Int, String) -> Unit,
-    onDeleteReview: (Int) -> Unit,
+    onEditReview: (String, Int, String) -> Unit,
+    onDeleteReview: (String) -> Unit,
+    onLikeClick: (String) -> Unit,
     onClearError: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -94,7 +96,12 @@ fun ReviewsScreenContent(
                             excerpt = review.comment,
                             timeAgo = "Hace 3 días",
                             onEdit = { editingReview = review },
-                            onDelete = { onDeleteReview(review.id) }
+                            onDelete = { onDeleteReview(review.id) },
+                            likes = review.likes,
+                            isLiked = review.isLiked,
+                            onLikeClick = { 
+                                onLikeClick(review.id) 
+                            }
                         )
                     }
                 }
@@ -133,18 +140,22 @@ fun ReviewsScreenPreview() {
             uiState = ReviewsUIState(
                 reviews = listOf(
                     ReviewItem(
-                        id = 1,
+                        id = "1",
                         movieId = 1,
                         movieTitle = "Inception",
                         rating = 5,
-                        comment = "Una película increíble que te hace pensar."
+                        comment = "Una película increíble que te hace pensar.",
+                        likes = 12,
+                        isLiked = true
                     ),
                     ReviewItem(
-                        id = 2,
+                        id = "2",
                         movieId = 2,
                         movieTitle = "The Matrix",
                         rating = 4,
-                        comment = "Un clásico del cine de ciencia ficción."
+                        comment = "Un clásico del cine de ciencia ficción.",
+                        likes = 8,
+                        isLiked = false
                     )
                 ),
                 isLoading = false
@@ -152,6 +163,7 @@ fun ReviewsScreenPreview() {
             onBack = {},
             onEditReview = { _, _, _ -> },
             onDeleteReview = { },
+            onLikeClick = { },
             onClearError = {}
         )
     }

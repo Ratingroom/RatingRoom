@@ -1,11 +1,14 @@
 package com.example.ratingroom.ui.screens.moviedetail
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,9 +32,11 @@ fun MovieDetailRoute(
     MovieDetailScreen(
         uiState = uiState,
         movieId = movieId,
+        currentUserId = viewModel.getCurrentUserId(),
         onBack = onBack,
         onClearError = { viewModel.clearError() },
-        onCreateReview = { rating, texto -> viewModel.createReview(movieId, rating, texto) }
+        onCreateReview = { rating, texto -> viewModel.createReview(movieId, rating, texto) },
+        onLikeClick = { reviewId, userId -> viewModel.sendOrDeleteLike(reviewId, userId) }
     )
 }
 
@@ -39,9 +44,11 @@ fun MovieDetailRoute(
 fun MovieDetailScreen(
     uiState: MovieDetailUIState,
     movieId: Int,
+    currentUserId: String,
     onBack: () -> Unit = {},
     onClearError: () -> Unit = {},
-    onCreateReview: (Int, String) -> Unit = { _, _ -> }
+    onCreateReview: (Int, String) -> Unit = { _, _ -> },
+    onLikeClick: (String, String) -> Unit = { _, _ -> }
 ) {
     val movie = uiState.movie
     val snackbarHostState = SnackbarHostState()
@@ -155,7 +162,12 @@ fun MovieDetailScreen(
                     }
 
                     items(uiState.reviews) { review ->
-                        ReviewItem(review = review)
+                        ReviewItem(
+                            review = review,
+                            onLikeClick = { 
+                                onLikeClick(review.id, currentUserId)
+                            }
+                        )
                         Spacer(Modifier.height(12.dp))
                     }
 
@@ -195,7 +207,10 @@ fun MovieDetailScreen(
 }
 
 @Composable
-private fun ReviewItem(review: Review) {
+private fun ReviewItem(
+    review: Review,
+    onLikeClick: () -> Unit
+) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
             // 🎯 Header con información del usuario
@@ -260,6 +275,34 @@ private fun ReviewItem(review: Review) {
                 text = review.comment,
                 color = MaterialTheme.colorScheme.onSurface
             )
+            
+            // Botón de Like
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onLikeClick,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = if (review.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (review.isLiked) "Quitar like" else "Dar like",
+                        tint = if (review.isLiked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                if (review.likes > 0) {
+                    Text(
+                        text = review.likes.toString(),
+                        color = if (review.isLiked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
         }
     }
 }

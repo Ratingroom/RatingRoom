@@ -179,6 +179,25 @@ class FirestoreDataSourceImpl @Inject constructor(
         }
     }
 
+    override suspend fun sendOrDeleteLike(reviewId: String, userId: String): Boolean {
+        val reviewRef = firestoreService.collection("reviews").document(reviewId)
+        val likesRef = reviewRef.collection("likes").document(userId)
+
+        return firestoreService.runTransaction { transaction ->
+            val likeDoc = transaction.get(likesRef)
+            
+            if (likeDoc.exists()) {
+                transaction.delete(likesRef)
+                transaction.set(reviewRef, mapOf("likes" to FieldValue.increment(-1)), com.google.firebase.firestore.SetOptions.merge())
+                false
+            } else {
+                transaction.set(likesRef, mapOf("timestamp" to FieldValue.serverTimestamp()))
+                transaction.set(reviewRef, mapOf("likes" to FieldValue.increment(1)), com.google.firebase.firestore.SetOptions.merge())
+                true
+            }
+        }.await()
+    }
+
     // ---------------- Películas ----------------
 
     override suspend fun getAllMovies(): List<Map<String, Any>> {

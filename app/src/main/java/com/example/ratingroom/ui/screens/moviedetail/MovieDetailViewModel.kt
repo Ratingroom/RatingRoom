@@ -1,8 +1,10 @@
 package com.example.ratingroom.ui.screens.moviedetail
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ratingroom.data.models.Review
+import com.example.ratingroom.repository.AuthRepository
 import com.example.ratingroom.repository.MovieRepository
 import com.example.ratingroom.repository.ReviewRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -10,6 +12,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -18,7 +21,8 @@ import java.util.Locale
 @HiltViewModel
 class MovieDetailViewModel @Inject constructor(
     private val reviewRepository: ReviewRepository,
-    private val movieRepository: MovieRepository
+    private val movieRepository: MovieRepository,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     // se mantiene para compatibilidad con tu UI/DTO
@@ -49,7 +53,9 @@ class MovieDetailViewModel @Inject constructor(
                         date = SimpleDateFormat("dd/MM/yyyy", Locale("es")).format(Date()),
                         // 🎯 Información del usuario autor del review
                         userName = dto.userName,
-                        userImageUrl = dto.userImageUrl
+                        userImageUrl = dto.userImageUrl,
+                        likes = dto.likes,
+                        isLiked = false
                     )
                 }
 
@@ -81,6 +87,41 @@ class MovieDetailViewModel @Inject constructor(
                 // recarga las reseñas desde Firestore para que aparezca la nueva
                 loadMovieDetail(movieId)
             }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
+            }
+        }
+    }
+
+    // Función para obtener el userId actual
+    fun getCurrentUserId(): String {
+        return authRepository.currentUser?.uid ?: "anonymous"
+    }
+
+    fun sendOrDeleteLike(reviewId: String, userId: String) {
+        viewModelScope.launch {
+            try {
+                val result = reviewRepository.sendOrDeleteLike(reviewId, userId)
+                
+                if (result.isSuccess) {
+                    val wasLiked = result.getOrNull() ?: false
+                    
+                    _uiState.update { currentState ->
+                        val updatedReviews = currentState.reviews.map { review ->
+                            if (review.id == reviewId) {
+                                review.copy(
+                                    likes = if (wasLiked) review.likes + 1 else review.likes - 1,
+                                    isLiked = wasLiked
+                                )
+                            } else {
+                                review
+                            }
+                        }
+                        currentState.copy(reviews = updatedReviews)
+                    }
+                } else {
+                    _uiState.value = _uiState.value.copy(errorMessage = result.exceptionOrNull()?.message)
+                }
+            } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(errorMessage = e.message)
             }
         }

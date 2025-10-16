@@ -164,7 +164,7 @@ class MovieRepository @Inject constructor(
 
     private fun mapReview(obj: JsonObject): Review {
         return Review(
-            id = obj.safeInt("id") ?: 0,
+            id = (obj.safeInt("id") ?: 0).toString(),
             movieId = obj.safeInt("pelicula_id") ?: obj.safeInt("peliculaId") ?: 0,
             userId = obj.safeInt("usuario_id") ?: obj.safeInt("userId") ?: 0,
             rating = (obj.safeDouble("rating") ?: obj.safeDouble("valor") ?: 0.0),

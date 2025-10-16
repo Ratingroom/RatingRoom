@@ -108,10 +108,10 @@ class ProfileViewModel @Inject constructor(
     fun updateReview(reviewId: Int, rating: Int, texto: String) {
         viewModelScope.launch {
             runCatching {
-                reviewRepository.update(currentUserIdForUi(), reviewId, rating, texto)
+                reviewRepository.update(currentUserIdForUi(), reviewId.toString(), rating, texto)
             }.onSuccess { updated ->
                 if (updated != null) {
-                    val newList = _uiState.value.reviews.map { if (it.id == reviewId) updated else it }
+                    val newList = _uiState.value.reviews.map { if (it.id == reviewId.toString()) updated else it }
                     val count = newList.size
                     val avg = if (count > 0) newList.map { it.rating }.average() else 0.0
                     _uiState.value = _uiState.value.copy(
@@ -130,10 +130,10 @@ class ProfileViewModel @Inject constructor(
 
     fun deleteReview(reviewId: Int) {
         viewModelScope.launch {
-            runCatching { reviewRepository.delete(currentUserIdForUi(), reviewId) }
+            runCatching { reviewRepository.delete(currentUserIdForUi(), reviewId.toString()) }
                 .onSuccess { ok ->
                     if (ok) {
-                        val newList = _uiState.value.reviews.filterNot { it.id == reviewId }
+                        val newList = _uiState.value.reviews.filterNot { it.id == reviewId.toString() }
                         val count = newList.size
                         val avg = if (count > 0) newList.map { it.rating }.average() else 0.0
                         _uiState.value = _uiState.value.copy(

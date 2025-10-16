@@ -22,7 +22,7 @@ class ReviewRepository @Inject constructor(
         )
 
         return ReviewDto(
-            id = reviewId.hashCode(),
+            id = reviewId,
             usuario_id = currentUserId,
             pelicula_id = articuloId,
             rating = rating,
@@ -42,15 +42,17 @@ class ReviewRepository @Inject constructor(
             // 🎯 Información desnormalizada del usuario
             val userName = map["userName"] as? String
             val userImageUrl = map["userImageUrl"] as? String
+            val likes = (map["likes"] as? Number)?.toInt() ?: 0
 
             ReviewDto(
-                id = idStr.hashCode(),
+                id = idStr, // ✅ Usar el ID real del documento (String)
                 usuario_id = 0,
                 pelicula_id = movieIdFromDb,
                 rating = ratingFromDb,
                 texto = textFromDb,
                 userName = userName,
-                userImageUrl = userImageUrl
+                userImageUrl = userImageUrl,
+                likes = likes
             )
         }
     }
@@ -73,15 +75,17 @@ class ReviewRepository @Inject constructor(
             // 🎯 Información desnormalizada del usuario
             val userName = map["userName"] as? String
             val userImageUrl = map["userImageUrl"] as? String
+            val likes = (map["likes"] as? Number)?.toInt() ?: 0
 
             ReviewDto(
-                id = idStr.hashCode(),
+                id = idStr,
                 usuario_id = userId,
                 pelicula_id = movieIdFromDb,
                 rating = ratingFromDb,
                 texto = textFromDb,
                 userName = userName,
-                userImageUrl = userImageUrl
+                userImageUrl = userImageUrl,
+                likes = likes
             )
         }
     }
@@ -99,22 +103,33 @@ class ReviewRepository @Inject constructor(
             // 🎯 Información desnormalizada del usuario
             val userName = map["userName"] as? String
             val userImageUrl = map["userImageUrl"] as? String
+            val likes = (map["likes"] as? Number)?.toInt() ?: 0
 
             ReviewDto(
-                id = idStr.hashCode(),
+                id = idStr,
                 usuario_id = 0, // no usamos el id entero en Firestore
                 pelicula_id = movieIdFromDb,
                 rating = ratingFromDb,
                 texto = textFromDb,
                 userName = userName,
-                userImageUrl = userImageUrl
+                userImageUrl = userImageUrl,
+                likes = likes
             )
         }
     }
 
     // Placeholders para compatibilidad si se usan desde la UI
-    suspend fun update(currentUserId: Int, reviewId: Int, rating: Int, texto: String): ReviewDto? = null
-    suspend fun delete(currentUserId: Int, reviewId: Int): Boolean = false
+    suspend fun update(currentUserId: Int, reviewId: String, rating: Int, texto: String): ReviewDto? = null
+    suspend fun delete(currentUserId: Int, reviewId: String): Boolean = false
     suspend fun listByUser(userId: Int): List<ReviewDto> = getReviewsByUser(0, userId)
     suspend fun getUserProfile(userId: Int) = null
+
+    suspend fun sendOrDeleteLike(reviewId: String, userId: String): Result<Boolean> {
+        return try {
+            val wasLiked = firestoreDataSource.sendOrDeleteLike(reviewId, userId)
+            Result.success(wasLiked)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

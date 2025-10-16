@@ -62,4 +62,6 @@ interface FirestoreDataSource {
 
     /** Lee reseñas del usuario (de /users/{userId}/reviews) */
     suspend fun getReviewsByUser(userId: String): List<Map<String, Any>>
+
+    suspend fun sendOrDeleteLike(reviewId: String, userId: String): Boolean
 }

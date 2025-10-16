@@ -1,11 +1,13 @@
 package com.example.ratingroom.ui.screens.reviews
 
 data class ReviewItem(
-    val id: Int,
+    val id: String,
     val movieId: Int,
     val movieTitle: String,
     val rating: Int,
-    val comment: String
+    val comment: String,
+    val likes: Int = 0,
+    val isLiked: Boolean = false
 )
 
 data class ReviewsUIState(

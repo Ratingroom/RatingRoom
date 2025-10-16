@@ -3,6 +3,7 @@ package com.example.ratingroom.ui.screens.reviews
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ratingroom.data.services.ReviewApiService
+import com.example.ratingroom.repository.AuthRepository
 import com.example.ratingroom.repository.MovieRepository
 import com.example.ratingroom.repository.ReviewRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -10,12 +11,14 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @HiltViewModel
 class ReviewsViewModel @Inject constructor(
     private val reviewRepository: ReviewRepository,
-    private val movieRepository: MovieRepository
+    private val movieRepository: MovieRepository,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
     
     // ID de usuario quemado para obtener datos de REST API
@@ -57,7 +60,9 @@ class ReviewsViewModel @Inject constructor(
                                 movieId = reviewDto.pelicula_id,
                                 movieTitle = movie?.title ?: "Película desconocida (ID: ${reviewDto.pelicula_id})",
                                 rating = reviewDto.rating,
-                                comment = reviewDto.texto
+                                comment = reviewDto.texto,
+                                likes = reviewDto.likes,
+                                isLiked = false // TODO: Verificar si el usuario actual ya dio like
                             )
                         )
                         println("ReviewsViewModel: ReviewItem agregado - Título: ${movie?.title ?: "Película ID ${reviewDto.pelicula_id}"}")
@@ -70,7 +75,9 @@ class ReviewsViewModel @Inject constructor(
                                 movieId = reviewDto.pelicula_id,
                                 movieTitle = "Película ID ${reviewDto.pelicula_id}",
                                 rating = reviewDto.rating,
-                                comment = reviewDto.texto
+                                comment = reviewDto.texto,
+                                likes = reviewDto.likes,
+                                isLiked = false // TODO: Verificar si el usuario actual ya dio like
                             )
                         )
                         println("ReviewsViewModel: ReviewItem agregado con título genérico")
@@ -96,7 +103,7 @@ class ReviewsViewModel @Inject constructor(
         }
     }
     
-    fun editReview(reviewId: Int, rating: Int, texto: String) {
+    fun editReview(reviewId: String, rating: Int, texto: String) {
         viewModelScope.launch {
             try {
                 val updated = reviewRepository.update(HARDCODED_USER_ID, reviewId, rating, texto)
@@ -117,7 +124,7 @@ class ReviewsViewModel @Inject constructor(
         }
     }
     
-    fun deleteReview(reviewId: Int) {
+    fun deleteReview(reviewId: String) {
         viewModelScope.launch {
             try {
                 val success = reviewRepository.delete(HARDCODED_USER_ID, reviewId)
@@ -138,5 +145,37 @@ class ReviewsViewModel @Inject constructor(
     
     fun refreshReviews() {
         loadReviews()
+    }
+
+    // ✅ Función para obtener el userId actual
+    fun getCurrentUserId(): String {
+        return authRepository.currentUser?.uid ?: "anonymous"
+    }
+
+    fun sendOrDeleteLike(reviewId: String, userId: String) {
+        viewModelScope.launch {
+            try {
+                val result = reviewRepository.sendOrDeleteLike(reviewId, userId)
+                if (result.isSuccess) {
+                    val wasLiked = result.getOrNull() ?: false
+                    _uiState.update { currentState ->
+                        val updatedReviews = currentState.reviews.map { review ->
+                            if (review.id == reviewId) {
+                                // ✅ Actualizar tanto likes como isLiked
+                                review.copy(
+                                    likes = if (wasLiked) review.likes + 1 else review.likes - 1,
+                                    isLiked = wasLiked
+                                )
+                            } else {
+                                review
+                            }
+                        }
+                        currentState.copy(reviews = updatedReviews)
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
+            }
+        }
     }
 }
