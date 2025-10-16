@@ -79,6 +79,9 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
     val profileViewModel: ProfileViewModel = hiltViewModel()
     val profileUiState by profileViewModel.uiState.collectAsState()
 
+    // ✅ Estado de autenticación reactivo
+    var currentAuthState by remember { mutableStateOf(isUserLoggedIn) }
+
     // Recargar perfil al salir de pantallas de auth
     LaunchedEffect(currentRoute) {
         if (
@@ -133,8 +136,12 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                 contentWindowInsets = WindowInsets(0, 0, 0, 0)
             ) { innerPadding ->
 
-                // ⬇️ INICIO SIEMPRE EN LOGIN
-                val startDestination = Screen.Login.route
+                // ✅ Iniciar según estado de autenticación actual
+                val startDestination = if (currentAuthState) {
+                    Screen.MainMenu.route
+                } else {
+                    Screen.Login.route
+                }
 
                 NavHost(
                     navController = navController,
@@ -145,6 +152,8 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                     composable(Screen.Login.route) {
                         LoginScreen(
                             onLoginClick = { _, _ ->
+                                // ✅ Actualizar estado de autenticación
+                                currentAuthState = true
                                 navController.navigate(Screen.MainMenu.route) {
                                     popUpTo(Screen.Login.route) { inclusive = true }
                                 }
@@ -156,6 +165,8 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                     composable(Screen.Register.route) {
                         RegisterScreen(
                             onRegisterClick = { _, _, _, _, _, _ ->
+                                // ✅ Actualizar estado de autenticación después del registro
+                                currentAuthState = true
                                 navigateBack()
                             },
                             onLoginClick = { navigateBack() },
@@ -261,6 +272,8 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                     onNavigate = { route -> navigateToScreen(route) },
                     onLogout = {
                         profileViewModel.logout()
+                        // ✅ Actualizar estado de autenticación
+                        currentAuthState = false
                         navController.navigate(Screen.Login.route) {
                             popUpTo(0) { inclusive = true }
                         }

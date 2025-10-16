@@ -64,15 +64,12 @@ class SplashActivity : ComponentActivity() {
     }
     
     private fun checkAuthAndNavigate() {
-        // TODO: Firebase - Descomentado temporalmente para limpiar sesión
-        // Forzar logout de Firebase para limpiar cualquier sesión anterior
-        authRepository.signOut()
-        
-        // Verificar si el usuario ya está autenticado
-        // val isUserLoggedIn = authRepository.isUserLoggedIn()
-        
-        // Forzar usuario logueado para usar REST API con ID quemado
-        val isUserLoggedIn = true
+        //forzar para rest api
+        //authRepository.signOut()
+        //val isUserLoggedIn = authRepository.isUserLoggedIn()
+        //val isUserLoggedIn = true
+        // ✅ Verificar si el usuario ya está autenticado en Firebase
+        val isUserLoggedIn = authRepository.isUserLoggedIn()
         
         val intent = Intent(this, MainActivity::class.java).apply {
             // Pasar información sobre el estado de autenticación
