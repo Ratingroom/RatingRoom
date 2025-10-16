@@ -12,7 +12,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class FavoritesViewModel @Inject constructor() : ViewModel() {
+class FavoritesViewModel @Inject constructor(
+    private val movieRepository: MovieRepository
+) : ViewModel() {
     
     private val _uiState = MutableStateFlow(FavoritesUIState())
     val uiState: StateFlow<FavoritesUIState> = _uiState.asStateFlow()
@@ -26,7 +28,7 @@ class FavoritesViewModel @Inject constructor() : ViewModel() {
             _uiState.value = _uiState.value.copy(isLoading = true)
             
             try {
-                val favoriteMovies = MovieRepository.getFavoriteMovies()
+                val favoriteMovies = movieRepository.getFavoriteMovies()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     favoriteMovies = favoriteMovies

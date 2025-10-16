@@ -13,7 +13,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class MainMenuViewModel @Inject constructor() : ViewModel() {
+class MainMenuViewModel @Inject constructor(
+    private val movieRepository: MovieRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
         MainMenuUIState(
@@ -39,8 +41,8 @@ class MainMenuViewModel @Inject constructor() : ViewModel() {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             try {
                 // Cargar en paralelo
-                val moviesDefer = async { MovieRepository.getAllMovies() }
-                val genresDefer = async { MovieRepository.getGenres() }
+                val moviesDefer = async { movieRepository.getAllMovies() }
+                val genresDefer = async { movieRepository.getGenres() }
 
                 val movies = moviesDefer.await()
                 val genres = genresDefer.await().ifEmpty { listOf("Todos") }

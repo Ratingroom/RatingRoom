@@ -64,7 +64,8 @@ class ProfileViewModel @Inject constructor(
                     favoriteGenre = userProfile.favoriteGenre,
                     reviewsCount = count,
                     averageRating = avg,
-                    profileImageUrl = userProfile.profileImageUrl
+                    profileImageUrl = userProfile.profileImageUrl,
+                    mainMovieId = userProfile.mainMovieId
                 )
 
                 _uiState.value = _uiState.value.copy(

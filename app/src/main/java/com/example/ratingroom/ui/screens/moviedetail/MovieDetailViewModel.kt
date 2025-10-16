@@ -17,7 +17,8 @@ import java.util.Locale
 
 @HiltViewModel
 class MovieDetailViewModel @Inject constructor(
-    private val reviewRepository: ReviewRepository
+    private val reviewRepository: ReviewRepository,
+    private val movieRepository: MovieRepository
 ) : ViewModel() {
 
     // se mantiene para compatibilidad con tu UI/DTO
@@ -32,7 +33,7 @@ class MovieDetailViewModel @Inject constructor(
 
             runCatching {
                 // ✅ Volvemos a tu método original que SÍ existe
-                val movie = MovieRepository.getMovieById(movieId)
+                val movie = movieRepository.getMovieById(movieId)
 
                 // ✅ Reseñas desde Firestore a través del repositorio que ya inyectas
                 val reviewsDto = reviewRepository.getReviewsByMovie(movieId)
@@ -45,12 +46,15 @@ class MovieDetailViewModel @Inject constructor(
                         userId = dto.usuario_id,
                         rating = dto.rating.toDouble(),
                         comment = dto.texto,
-                        date = SimpleDateFormat("dd/MM/yyyy", Locale("es")).format(Date())
+                        date = SimpleDateFormat("dd/MM/yyyy", Locale("es")).format(Date()),
+                        // 🎯 Información del usuario autor del review
+                        userName = dto.userName,
+                        userImageUrl = dto.userImageUrl
                     )
                 }
 
                 movie to reviews
-            }.onSuccess { (movie, reviews) ->
+            }.onSuccess { (movie: com.example.ratingroom.data.models.Movie?, reviews: List<Review>) ->
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     movie = movie,

@@ -11,7 +11,8 @@ data class FriendProfileData(
     val profileImageUrl: String? = null,
     val biography: String? = null,
     val location: String? = null,
-    val website: String? = null
+    val website: String? = null,
+    val mainMovieId: Int? = null // 🎬 ID de la película principal
 )
 
 data class FriendUIState(

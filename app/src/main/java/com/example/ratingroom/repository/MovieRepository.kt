@@ -13,13 +13,18 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Path
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object MovieRepository {
+@Singleton
+class MovieRepository @Inject constructor(
+    private val firebaseRepository: MovieFirebaseRepository
+) {
 
-    private const val TAG = "MovieRepo"
+    private val TAG = "MovieRepo"
 
     // Cambia si corres en dispositivo físico
-    private const val BASE_URL = "http://10.0.2.2:3000/"
+    private val BASE_URL = "http://10.0.2.2:3000/"
 
     private interface ApiService {
         @GET("api/peliculas")
@@ -45,10 +50,10 @@ object MovieRepository {
 
     // ---------- helpers de navegación segura del JSON ----------
     private fun JsonElement.asJsonObjectOrNull(): JsonObject? =
-        if (this != null && this.isJsonObject) this.asJsonObject else null
+        if (this.isJsonObject) this.asJsonObject else null
 
     private fun JsonElement.asJsonArrayOrNull(): JsonArray? =
-        if (this != null && this.isJsonArray) this.asJsonArray else null
+        if (this.isJsonArray) this.asJsonArray else null
 
     private fun JsonObject.safeString(name: String): String? =
         if (has(name) && get(name).isJsonPrimitive) get(name).asString else null
@@ -183,13 +188,28 @@ object MovieRepository {
 
     /**
      * Devuelve lista de películas.
-     * Soporta respuestas:
-     *  - [ {...}, {...} ]
-     *  - { data: { peliculas: [ ... ] } }
-     *  - { data: [ ... ] }
-     *  - { peliculas: [ ... ] }
+     * 🔥 Firebase como fuente principal, REST API como fallback opcional
      */
     suspend fun getAllMovies(): List<Movie> = withContext(Dispatchers.IO) {
+        Log.d(TAG, "🎬 Iniciando carga de películas...")
+        
+        // 1️⃣ Intentar Firebase primero
+        try {
+            Log.d(TAG, "🔥 Intentando cargar desde Firebase...")
+            val firebaseMovies = firebaseRepository.getAllMovies()
+            Log.d(TAG, "🔥 Firebase devolvió ${firebaseMovies.size} películas")
+            if (firebaseMovies.isNotEmpty()) {
+                Log.d(TAG, "✅ Películas cargadas desde Firebase: ${firebaseMovies.size}")
+                return@withContext firebaseMovies
+            } else {
+                Log.w(TAG, "⚠️ Firebase devolvió lista vacía")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ Error en Firebase, intentando REST API: ${e.message}", e)
+        }
+
+        // 2️⃣ Fallback a REST API (opcional)
+        Log.d(TAG, "🔄 Usando REST API como fallback")
         val root = try {
             api.getPeliculasRaw()
         } catch (e: Exception) {
@@ -212,6 +232,18 @@ object MovieRepository {
     }
 
     suspend fun getMoviesByGenre(genre: String): List<Movie> {
+        // 1️⃣ Intentar Firebase primero
+        try {
+            val firebaseMovies = firebaseRepository.getMoviesByGenre(genre)
+            if (firebaseMovies.isNotEmpty()) {
+                Log.d(TAG, "✅ Películas por género '$genre' cargadas desde Firebase: ${firebaseMovies.size}")
+                return firebaseMovies
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ Error en Firebase para género '$genre', usando fallback: ${e.message}")
+        }
+
+        // 2️⃣ Fallback a REST API
         val all = getAllMovies()
         return if (genre == "Todos") all else all.filter { it.genre.equals(genre, ignoreCase = true) }
     }
@@ -219,6 +251,19 @@ object MovieRepository {
     suspend fun searchMovies(query: String): List<Movie> {
         val q = query.trim()
         if (q.isEmpty()) return getAllMovies()
+
+        // 1️⃣ Intentar Firebase primero
+        try {
+            val firebaseMovies = firebaseRepository.searchMovies(q)
+            if (firebaseMovies.isNotEmpty()) {
+                Log.d(TAG, "✅ Búsqueda '$q' desde Firebase: ${firebaseMovies.size} resultados")
+                return firebaseMovies
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ Error en Firebase para búsqueda '$q', usando fallback: ${e.message}")
+        }
+
+        // 2️⃣ Fallback a REST API
         return getAllMovies().filter {
             it.title.contains(q, ignoreCase = true) ||
                     it.description.contains(q, ignoreCase = true) ||
@@ -227,7 +272,19 @@ object MovieRepository {
     }
 
     suspend fun getMovieById(id: Int): Movie? = withContext(Dispatchers.IO) {
-        // Intento directo al endpoint de detalle
+        // 1️⃣ Intentar Firebase primero
+        try {
+            val firebaseMovie = firebaseRepository.getMovieById(id)
+            if (firebaseMovie != null) {
+                Log.d(TAG, "✅ Película $id cargada desde Firebase")
+                return@withContext firebaseMovie
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ Error en Firebase para película $id, intentando REST API: ${e.message}")
+        }
+
+        // 2️⃣ Fallback a REST API (opcional)
+        Log.d(TAG, "🔄 Usando REST API como fallback para película $id")
         val direct: Movie? = try {
             val root = api.getPeliculaRaw(id)
             val obj = asObjectFlexible(root)

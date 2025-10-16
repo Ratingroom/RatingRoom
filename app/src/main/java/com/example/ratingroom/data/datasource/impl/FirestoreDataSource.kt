@@ -1,5 +1,6 @@
 package com.example.ratingroom.data.datasource.impl
 
+import android.util.Log
 import com.example.ratingroom.data.datasource.FirestoreDataSource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -26,7 +27,8 @@ class FirestoreDataSourceImpl @Inject constructor(
         favoriteGenre: String?,
         birthdate: String?,
         website: String?,
-        profileImageUrl: String?
+        profileImageUrl: String?,
+        mainMovieId: Int?
     ) {
         val userId = currentUserId ?: throw IllegalStateException("Usuario no autenticado")
 
@@ -39,6 +41,7 @@ class FirestoreDataSourceImpl @Inject constructor(
         birthdate?.let { updates["birthdate"] = it }
         website?.let { updates["website"] = it }
         profileImageUrl?.let { updates["profileImageUrl"] = it }
+        mainMovieId?.let { updates["mainMovieId"] = it }
         updates["updatedAt"] = System.currentTimeMillis()
 
         if (updates.isNotEmpty()) {
@@ -100,7 +103,12 @@ class FirestoreDataSourceImpl @Inject constructor(
         rating: Int,
         text: String
     ): String {
-        // 1) Crea documento raíz en /reviews
+        // 1) Obtener información del usuario para desnormalizar
+        val userProfile = getUserProfileById(userId)
+        val userName = userProfile?.get("fullName") as? String ?: "Usuario"
+        val userImageUrl = userProfile?.get("profileImageUrl") as? String
+        
+        // 2) Crea documento raíz en /reviews
         val reviewDoc = firestoreService.collection("reviews").document()
         val now = System.currentTimeMillis()
         val reviewData = mapOf(
@@ -110,13 +118,16 @@ class FirestoreDataSourceImpl @Inject constructor(
             "rating" to rating,
             "text" to text,
             "createdAt" to now,
-            "updatedAt" to now
+            "updatedAt" to now,
+            // 🎯 Desnormalización: información del usuario
+            "userName" to userName,
+            "userImageUrl" to (userImageUrl ?: "")
         )
 
         // Escritura inicial
         reviewDoc.set(reviewData).await()
 
-        // 2) Fanout a /users/{uid}/reviews/{reviewId}
+        // 3) Fanout a /users/{uid}/reviews/{reviewId}
         firestoreService.collection("users")
             .document(userId)
             .collection("reviews")
@@ -124,7 +135,7 @@ class FirestoreDataSourceImpl @Inject constructor(
             .set(reviewData)
             .await()
 
-        // 3) Fanout a /movies/{movieId}/reviews/{reviewId}
+        // 4) Fanout a /movies/{movieId}/reviews/{reviewId}
         firestoreService.collection("movies")
             .document(movieId.toString())
             .set(mapOf("updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge())
@@ -165,6 +176,76 @@ class FirestoreDataSourceImpl @Inject constructor(
             doc.data?.toMutableMap()?.apply {
                 if (this["id"] == null) this["id"] = doc.id
             }
+        }
+    }
+
+    // ---------------- Películas ----------------
+
+    override suspend fun getAllMovies(): List<Map<String, Any>> {
+        try {
+            Log.d("FirestoreDataSource", "🔥 Obteniendo películas desde Firestore...")
+            val snapshot = firestoreService.collection("movies")
+                .get()
+                .await()
+
+            Log.d("FirestoreDataSource", "🔥 Firestore devolvió ${snapshot.documents.size} documentos")
+            
+            val movies = snapshot.documents.mapNotNull { doc ->
+                doc.data?.toMutableMap()?.apply {
+                    // Asegurar que el ID esté presente
+                    if (this["id"] == null) this["id"] = doc.id.toIntOrNull() ?: 0
+                    Log.d("FirestoreDataSource", "🔥 Película: ${this["title"]} (ID: ${this["id"]})")
+                }
+            }
+            
+            Log.d("FirestoreDataSource", "🔥 Procesadas ${movies.size} películas")
+            return movies
+        } catch (e: Exception) {
+            Log.e("FirestoreDataSource", "🔥 Error obteniendo películas desde Firestore: ${e.message}", e)
+            return emptyList()
+        }
+    }
+
+    override suspend fun getMovieById(movieId: Int): Map<String, Any>? {
+        val doc = firestoreService.collection("movies")
+            .document(movieId.toString())
+            .get()
+            .await()
+
+        return if (doc.exists()) {
+            doc.data?.toMutableMap()?.apply {
+                if (this["id"] == null) this["id"] = movieId
+            }
+        } else {
+            null
+        }
+    }
+
+    override suspend fun getMoviesByGenre(genre: String): List<Map<String, Any>> {
+        val allMovies = getAllMovies()
+        return if (genre == "Todos") {
+            allMovies
+        } else {
+            allMovies.filter { movie ->
+                val movieGenre = movie["genre"] as? String ?: ""
+                movieGenre.equals(genre, ignoreCase = true)
+            }
+        }
+    }
+
+    override suspend fun searchMovies(query: String): List<Map<String, Any>> {
+        val q = query.trim()
+        if (q.isEmpty()) return getAllMovies()
+        
+        val allMovies = getAllMovies()
+        return allMovies.filter { movie ->
+            val title = movie["title"] as? String ?: ""
+            val description = movie["description"] as? String ?: ""
+            val genre = movie["genre"] as? String ?: ""
+            
+            title.contains(q, ignoreCase = true) ||
+            description.contains(q, ignoreCase = true) ||
+            genre.contains(q, ignoreCase = true)
         }
     }
 

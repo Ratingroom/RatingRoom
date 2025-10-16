@@ -39,13 +39,18 @@ class ReviewRepository @Inject constructor(
             val textFromDb    = map["text"] as? String ?: ""
             val idStr         = (map["id"] as? String)
                 ?: "${movieIdFromDb}_${textFromDb.hashCode()}_${ratingFromDb}"
+            // 🎯 Información desnormalizada del usuario
+            val userName = map["userName"] as? String
+            val userImageUrl = map["userImageUrl"] as? String
 
             ReviewDto(
                 id = idStr.hashCode(),
                 usuario_id = 0,
                 pelicula_id = movieIdFromDb,
                 rating = ratingFromDb,
-                texto = textFromDb
+                texto = textFromDb,
+                userName = userName,
+                userImageUrl = userImageUrl
             )
         }
     }
@@ -65,13 +70,18 @@ class ReviewRepository @Inject constructor(
             val textFromDb    = map["text"] as? String ?: ""
             val idStr         = (map["id"] as? String)
                 ?: "${movieIdFromDb}_${textFromDb.hashCode()}_${ratingFromDb}"
+            // 🎯 Información desnormalizada del usuario
+            val userName = map["userName"] as? String
+            val userImageUrl = map["userImageUrl"] as? String
 
             ReviewDto(
                 id = idStr.hashCode(),
                 usuario_id = userId,
                 pelicula_id = movieIdFromDb,
                 rating = ratingFromDb,
-                texto = textFromDb
+                texto = textFromDb,
+                userName = userName,
+                userImageUrl = userImageUrl
             )
         }
     }
@@ -86,13 +96,18 @@ class ReviewRepository @Inject constructor(
             val textFromDb    = map["text"] as? String ?: ""
             val idStr         = (map["id"] as? String)
                 ?: "${movieIdFromDb}_${textFromDb.hashCode()}_${ratingFromDb}"
+            // 🎯 Información desnormalizada del usuario
+            val userName = map["userName"] as? String
+            val userImageUrl = map["userImageUrl"] as? String
 
             ReviewDto(
                 id = idStr.hashCode(),
                 usuario_id = 0, // no usamos el id entero en Firestore
                 pelicula_id = movieIdFromDb,
                 rating = ratingFromDb,
-                texto = textFromDb
+                texto = textFromDb,
+                userName = userName,
+                userImageUrl = userImageUrl
             )
         }
     }

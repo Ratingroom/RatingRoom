@@ -12,7 +12,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class SynopsisViewModel @Inject constructor() : ViewModel() {
+class SynopsisViewModel @Inject constructor(
+    private val movieRepository: MovieRepository
+) : ViewModel() {
     
     private val _uiState = MutableStateFlow(SynopsisUIState())
     val uiState: StateFlow<SynopsisUIState> = _uiState.asStateFlow()
@@ -22,7 +24,7 @@ class SynopsisViewModel @Inject constructor() : ViewModel() {
             _uiState.value = _uiState.value.copy(isLoading = true)
             
             try {
-                val movie = MovieRepository.getMovieById(movieId)
+                val movie = movieRepository.getMovieById(movieId)
                 val cast = listOf(
                     CastMember("Actor Principal", "Protagonista", true),
                     CastMember("Actriz Principal", "Protagonista", true),

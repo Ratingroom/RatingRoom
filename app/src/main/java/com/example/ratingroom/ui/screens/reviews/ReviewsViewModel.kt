@@ -14,7 +14,8 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class ReviewsViewModel @Inject constructor(
-    private val reviewRepository: ReviewRepository
+    private val reviewRepository: ReviewRepository,
+    private val movieRepository: MovieRepository
 ) : ViewModel() {
     
     // ID de usuario quemado para obtener datos de REST API
@@ -46,7 +47,7 @@ class ReviewsViewModel @Inject constructor(
                 for (reviewDto in userReviews) {
                     try {
                         // Obtener información de la película (función suspend)
-                        val movie = MovieRepository.getMovieById(reviewDto.pelicula_id)
+                        val movie = movieRepository.getMovieById(reviewDto.pelicula_id)
                         println("ReviewsViewModel: Película obtenida para ID ${reviewDto.pelicula_id}: ${movie?.title}")
                         
                         // Siempre agregar la reseña, incluso si no se encuentra la película

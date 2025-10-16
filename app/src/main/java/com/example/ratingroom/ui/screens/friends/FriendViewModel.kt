@@ -78,6 +78,7 @@ private fun UserProfile.toFriendProfileData(): FriendProfileData {
         profileImageUrl = profileImageUrl,
         biography = biography,
         location = location,
-        website = website
+        website = website,
+        mainMovieId = mainMovieId
     )
 }

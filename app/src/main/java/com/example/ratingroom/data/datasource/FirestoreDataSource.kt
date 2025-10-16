@@ -19,10 +19,24 @@ interface FirestoreDataSource {
         favoriteGenre: String? = null,
         birthdate: String? = null,
         website: String? = null,
-        profileImageUrl: String? = null
+        profileImageUrl: String? = null,
+        mainMovieId: Int? = null
     )
 
     suspend fun getUserProfile(): Map<String, Any>?
+
+    // ------- Películas --------
+    /** Obtiene todas las películas desde Firebase */
+    suspend fun getAllMovies(): List<Map<String, Any>>
+
+    /** Obtiene una película específica por ID desde Firebase */
+    suspend fun getMovieById(movieId: Int): Map<String, Any>?
+
+    /** Obtiene películas por género desde Firebase */
+    suspend fun getMoviesByGenre(genre: String): List<Map<String, Any>>
+
+    /** Busca películas por query desde Firebase */
+    suspend fun searchMovies(query: String): List<Map<String, Any>>
 
     // ------- Reseñas --------
     /**

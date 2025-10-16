@@ -47,9 +47,6 @@ import com.example.ratingroom.ui.utils.ModernNavigationDrawer
 import com.example.ratingroom.ui.utils.ModernTopBar
 import dagger.hilt.android.AndroidEntryPoint
 
-// 👇 UID fijo del perfil a mostrar (documento en /users/<UID>)
-private const val TEST_USER_ID = "B17bRz4lPlVW2Tn2lVOuGj3P2RY2"
-
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -198,12 +195,12 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                         )
                     }
 
-                    // Friends -> abre el perfil fijo TEST_USER_ID
+                    // Friends -> abre el perfil del usuario clickeado
                     composable(Screen.Friends.route) {
                         FriendsScreen(
                             onBack = navigateBack,
-                            onUserClick = { _ ->
-                                navigateToScreen(Screen.Friend.createRoute(TEST_USER_ID))
+                            onUserClick = { userId ->
+                                navigateToScreen(Screen.Friend.createRoute(userId))
                             }
                         )
                     }

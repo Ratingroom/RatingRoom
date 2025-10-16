@@ -25,6 +25,7 @@ data class UserProfile(
     val birthdate: String? = null,
     val website: String? = null,
     val profileImageUrl: String? = null,
+    val mainMovieId: Int? = null, // 🎬 Película principal del usuario
     val createdAt: Long? = null,
     val updatedAt: Long? = null
 )
@@ -90,7 +91,8 @@ class AuthRepository @Inject constructor(
         favoriteGenre: String? = null,
         birthdate: String? = null,
         website: String? = null,
-        profileImageUrl: String? = null
+        profileImageUrl: String? = null,
+        mainMovieId: Int? = null
     ): Result<Unit> {
         return runCatching {
             // Cambios en Firebase Auth
@@ -106,7 +108,8 @@ class AuthRepository @Inject constructor(
                 favoriteGenre = favoriteGenre,
                 birthdate = birthdate,
                 website = website,
-                profileImageUrl = profileImageUrl
+                profileImageUrl = profileImageUrl,
+                mainMovieId = mainMovieId
             )
         }.mapErrorAuth()
     }
@@ -119,6 +122,7 @@ class AuthRepository @Inject constructor(
 
             if (profileData != null) {
                 val profileImageUrl = profileData["profileImageUrl"] as? String
+                val mainMovieId = (profileData["mainMovieId"] as? Number)?.toInt()
                 UserProfile(
                     uid = user.uid,
                     email = user.email ?: "",
@@ -130,6 +134,7 @@ class AuthRepository @Inject constructor(
                     birthdate = profileData["birthdate"] as? String,
                     website = profileData["website"] as? String,
                     profileImageUrl = profileImageUrl,
+                    mainMovieId = mainMovieId,
                     createdAt = profileData["createdAt"] as? Long,
                     updatedAt = profileData["updatedAt"] as? Long
                 )
@@ -151,6 +156,7 @@ class AuthRepository @Inject constructor(
 
             val email = profileData["email"] as? String ?: ""
             val profileImageUrl = profileData["profileImageUrl"] as? String
+            val mainMovieId = (profileData["mainMovieId"] as? Number)?.toInt()
 
             UserProfile(
                 uid = userId,
@@ -163,6 +169,7 @@ class AuthRepository @Inject constructor(
                 birthdate = profileData["birthdate"] as? String,
                 website = profileData["website"] as? String,
                 profileImageUrl = profileImageUrl,
+                mainMovieId = mainMovieId,
                 createdAt = profileData["createdAt"] as? Long,
                 updatedAt = profileData["updatedAt"] as? Long
             )

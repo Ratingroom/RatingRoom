@@ -4,6 +4,8 @@ import com.example.ratingroom.data.datasource.AuthRemoteDataSource
 import com.example.ratingroom.data.datasource.FirestoreDataSource
 import com.example.ratingroom.data.datasource.impl.AuthRemoteDataSourceImpl
 import com.example.ratingroom.data.datasource.impl.FirestoreDataSourceImpl
+import com.example.ratingroom.repository.MovieFirebaseRepository
+import com.example.ratingroom.repository.MovieRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Module
@@ -31,5 +33,21 @@ object DataSourceModule {
         authService: FirebaseAuth
     ): FirestoreDataSource {
         return FirestoreDataSourceImpl(firestoreService, authService)
+    }
+
+    @Provides
+    @Singleton
+    fun provideMovieFirebaseRepository(
+        firestoreDataSource: FirestoreDataSource
+    ): MovieFirebaseRepository {
+        return MovieFirebaseRepository(firestoreDataSource)
+    }
+
+    @Provides
+    @Singleton
+    fun provideMovieRepository(
+        movieFirebaseRepository: MovieFirebaseRepository
+    ): MovieRepository {
+        return MovieRepository(movieFirebaseRepository)
     }
 }

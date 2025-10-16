@@ -32,5 +32,8 @@ data class Review(
     val userId: Int,
     val rating: Double,
     val comment: String,
-    val date: String
+    val date: String,
+    // 🎯 Información del usuario autor del review
+    val userName: String? = null,
+    val userImageUrl: String? = null
 )

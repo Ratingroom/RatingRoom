@@ -11,7 +11,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class ListViewModel @Inject constructor() : ViewModel() {
+class ListViewModel @Inject constructor(
+    private val movieRepository: MovieRepository
+) : ViewModel() {
     
     private val _uiState = MutableStateFlow(ListUIState())
     val uiState: StateFlow<ListUIState> = _uiState.asStateFlow()
@@ -25,9 +27,9 @@ class ListViewModel @Inject constructor() : ViewModel() {
             _uiState.value = _uiState.value.copy(isLoading = true)
             
             try {
-                val watchLaterMovies = MovieRepository.getWatchLaterMovies()
-                val favoriteMovies = MovieRepository.getFavoriteMovies()
-                val watchedMovies = MovieRepository.getWatchedMovies()
+                val watchLaterMovies = movieRepository.getWatchLaterMovies()
+                val favoriteMovies = movieRepository.getFavoriteMovies()
+                val watchedMovies = movieRepository.getWatchedMovies()
                 
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
