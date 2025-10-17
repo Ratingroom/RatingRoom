@@ -13,5 +13,8 @@
     
     <!-- Color para splash screen -->
     <color name="splash_background">#415EC2</color>
+    
+    <!-- Colores para notificaciones FCM -->
+    <color name="purple_500">#415EC2</color>
 
 </resources>

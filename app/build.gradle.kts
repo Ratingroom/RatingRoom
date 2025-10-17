@@ -5,8 +5,10 @@ plugins {
     alias(libs.plugins.dagger)
     alias(libs.plugins.google.ksp)          // ✅ KSP
     // id("kotlin-kapt")                    // ❌ FUERA KAPT
-    id("com.google.gms.google-services")
+
     alias(libs.plugins.firebase.crashlytics)
+    alias(libs.plugins.google.services)
+
 }
 
 android {
@@ -60,6 +62,7 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.storage)
+    implementation("com.google.firebase:firebase-messaging-ktx:23.4.1")
 
     // Tasks .await() con Firebase
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
@@ -93,4 +96,8 @@ dependencies {
 
     // Splash Screen API
     implementation("androidx.core:core-splashscreen:1.0.1")
+
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-messaging")
+
 }

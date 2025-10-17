@@ -4,6 +4,9 @@
 
     <!-- Permiso de red -->
     <uses-permission android:name="android.permission.INTERNET" />
+    
+    <!-- Permiso para notificaciones (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".BaseApplication"
@@ -36,6 +39,23 @@
             android:exported="false"
             android:label="@string/app_name"
             android:theme="@style/Theme.RatingRoom" />
+
+        <!-- Firebase Cloud Messaging Service -->
+        <service
+            android:name=".service.MyFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Configuración opcional de icono y color de notificación -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/logoratingroom" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/purple_500" />
     </application>
 
 </manifest>
