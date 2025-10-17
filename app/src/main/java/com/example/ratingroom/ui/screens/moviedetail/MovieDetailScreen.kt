@@ -29,6 +29,8 @@ fun MovieDetailRoute(
 ) {
     LaunchedEffect(movieId) { viewModel.loadMovieDetail(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val followingOnly by viewModel.showFollowingOnly.collectAsStateWithLifecycle() // NUEVO
+
     MovieDetailScreen(
         uiState = uiState,
         movieId = movieId,
@@ -36,7 +38,9 @@ fun MovieDetailRoute(
         onBack = onBack,
         onClearError = { viewModel.clearError() },
         onCreateReview = { rating, texto -> viewModel.createReview(movieId, rating, texto) },
-        onLikeClick = { reviewId, userId -> viewModel.sendOrDeleteLike(reviewId, userId) }
+        onLikeClick = { reviewId, userId -> viewModel.sendOrDeleteLike(reviewId, userId) },
+        followingOnly = followingOnly,                               // NUEVO
+        onToggleFollowingOnly = { viewModel.setShowFollowingOnly(it) } // NUEVO
     )
 }
 
@@ -48,7 +52,9 @@ fun MovieDetailScreen(
     onBack: () -> Unit = {},
     onClearError: () -> Unit = {},
     onCreateReview: (Int, String) -> Unit = { _, _ -> },
-    onLikeClick: (String, String) -> Unit = { _, _ -> }
+    onLikeClick: (String, String) -> Unit = { _, _ -> },
+    followingOnly: Boolean,                               // NUEVO
+    onToggleFollowingOnly: (Boolean) -> Unit              // NUEVO
 ) {
     val movie = uiState.movie
     val snackbarHostState = SnackbarHostState()
@@ -153,18 +159,49 @@ fun MovieDetailScreen(
                         )
                         Spacer(Modifier.height(16.dp))
 
-                        Text(
-                            text = "Reseñas",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        // Encabezado de reseñas + Toggle "Solo seguidos"
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Reseñas",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Solo seguidos",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Switch(
+                                    checked = followingOnly,                        // CAMBIO
+                                    onCheckedChange = { onToggleFollowingOnly(it) }, // CAMBIO
+                                    enabled = currentUserId.isNotBlank()
+                                )
+                            }
+                        }
+
+                        // Hint si no autenticado
+                        if (currentUserId.isBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = "Inicia sesión para filtrar por usuarios que sigues.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
                         Spacer(Modifier.height(8.dp))
                     }
 
                     items(uiState.reviews) { review ->
                         ReviewItem(
                             review = review,
-                            onLikeClick = { 
+                            onLikeClick = {
                                 onLikeClick(review.id, currentUserId)
                             }
                         )
@@ -190,7 +227,7 @@ fun MovieDetailScreen(
             }
         }
     }
-    
+
     // Diálogo para crear reseña
     if (showCreateReview) {
         ReviewEditorDialog(
@@ -275,7 +312,7 @@ private fun ReviewItem(
                 text = review.comment,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            
+
             // Botón de Like
             Spacer(Modifier.height(8.dp))
             Row(

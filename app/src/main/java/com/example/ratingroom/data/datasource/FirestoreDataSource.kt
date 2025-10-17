@@ -29,42 +29,21 @@ interface FirestoreDataSource {
     suspend fun getUserProfileById(userId: String): Map<String, Any>?
 
     // ------- Amigos (Seguidores/Seguidos) --------
-    /** Lista de usuarios que sigue el usuario actual */
-    suspend fun getFollowing(userId: String): List<Map<String, Any>>
-
-    /** Lista de usuarios que siguen al usuario actual */
-    suspend fun getFollowers(userId: String): List<Map<String, Any>>
-
-    /** Lista de todos los usuarios (para generar sugerencias) */
+    /** Lista de todos los usuarios (para sugerencias) */
     suspend fun getAllUsers(): List<Map<String, Any>>
 
-    /** Seguir a un usuario (crea documentos en following y followers) */
-    suspend fun followUser(targetUserId: String)
-
-    /** Dejar de seguir a un usuario (elimina documentos en following y followers) */
-    suspend fun unfollowUser(targetUserId: String)
-
-    
-    // ------- Seguidores y Seguidos --------
+    /** Seguir / dejar de seguir */
     suspend fun followUser(targetUserId: String): Boolean
-    
     suspend fun unfollowUser(targetUserId: String): Boolean
-    
+
+    /** Listas de seguidores y seguidos */
     suspend fun getFollowers(userId: String): List<Map<String, Any>>
-    
     suspend fun getFollowing(userId: String): List<Map<String, Any>>
 
     // ------- Películas --------
-    /** Obtiene todas las películas desde Firebase */
     suspend fun getAllMovies(): List<Map<String, Any>>
-
-    /** Obtiene una película específica por ID desde Firebase */
     suspend fun getMovieById(movieId: Int): Map<String, Any>?
-
-    /** Obtiene películas por género desde Firebase */
     suspend fun getMoviesByGenre(genre: String): List<Map<String, Any>>
-
-    /** Busca películas por query desde Firebase */
     suspend fun searchMovies(query: String): List<Map<String, Any>>
 
     // ------- Reseñas --------
@@ -83,12 +62,14 @@ interface FirestoreDataSource {
         text: String
     ): String
 
+    /** Lecturas únicas */
     suspend fun getReviewsByMovie(movieId: Int): List<Map<String, Any>>
     suspend fun getReviewsByUser(userId: String): List<Map<String, Any>>
-    
-    /** Observa reseñas del usuario en tiempo real */
+
+    /** Tiempo real */
+    fun observeReviewsByMovie(movieId: Int): Flow<List<Map<String, Any>>>
     fun observeReviewsByUser(userId: String): Flow<List<Map<String, Any>>>
 
-    /** Envía o elimina like en una reseña. Devuelve true si quedó con like, false si se eliminó */
+    /** Like toggle en reseña: true si quedó con like, false si se quitó */
     suspend fun sendOrDeleteLike(reviewId: String, userId: String): Boolean
 }
