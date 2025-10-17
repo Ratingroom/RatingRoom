@@ -237,7 +237,9 @@ class ProfileViewModel @Inject constructor(
 
     fun logout() {
         clearFollowListeners()
-        authRepository.signOut()
+        viewModelScope.launch {
+            authRepository.signOut()
+        }
     }
 
     // ---------- Función en línea: mejora integridad ----------

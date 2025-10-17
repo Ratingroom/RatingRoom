@@ -1,16 +1,22 @@
 package com.example.ratingroom
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
@@ -34,19 +40,69 @@ import com.example.ratingroom.ui.theme.RatingRoomTheme
 import com.example.ratingroom.ui.utils.GradientBackground
 import com.example.ratingroom.ui.utils.ModernNavigationDrawer
 import com.example.ratingroom.ui.utils.ModernTopBar
+import com.example.ratingroom.utils.FCMTokenManager
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var fcmTokenManager: FCMTokenManager
+
+    // Launcher para pedir permiso de notificaciones (Android 13+)
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            // Permiso concedido, obtener token FCM
+            lifecycleScope.launch {
+                fcmTokenManager.refreshFCMToken()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         val isUserLoggedIn = intent.getBooleanExtra(SplashActivity.EXTRA_IS_USER_LOGGED_IN, false)
 
+        // 🔔 Solicitar permiso de notificaciones y obtener token FCM
+        requestNotificationPermissionAndGetToken()
+
         setContent {
             RatingRoomTheme {
                 RatingRoomApp(isUserLoggedIn = isUserLoggedIn)
+            }
+        }
+    }
+
+    /**
+     * 🔔 Solicita permiso de notificaciones (Android 13+) y obtiene token FCM
+     */
+    private fun requestNotificationPermissionAndGetToken() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            when {
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED -> {
+                    // Permiso ya concedido, obtener token
+                    lifecycleScope.launch {
+                        fcmTokenManager.refreshFCMToken()
+                    }
+                }
+                else -> {
+                    // Solicitar permiso
+                    requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        } else {
+            // Android 12 o menor, obtener token directamente
+            lifecycleScope.launch {
+                fcmTokenManager.refreshFCMToken()
             }
         }
     }

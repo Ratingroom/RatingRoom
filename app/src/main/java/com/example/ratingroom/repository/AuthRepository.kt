@@ -2,6 +2,7 @@ package com.example.ratingroom.repository
 
 import com.example.ratingroom.data.datasource.AuthRemoteDataSource
 import com.example.ratingroom.data.datasource.FirestoreDataSource
+import com.example.ratingroom.utils.FCMTokenManager
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuthActionCodeException
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
@@ -35,7 +36,8 @@ data class UserProfile(
 @Singleton
 class AuthRepository @Inject constructor(
     private val authRemoteDataSource: AuthRemoteDataSource,
-    private val firestoreDataSource: FirestoreDataSource
+    private val firestoreDataSource: FirestoreDataSource,
+    private val fcmTokenManager: FCMTokenManager
 ) {
 
     val currentUser: FirebaseUser? get() = authRemoteDataSource.currentUser
@@ -242,7 +244,10 @@ class AuthRepository @Inject constructor(
     }
 
     // ---------- Utilidades ----------
-    fun signOut() {
+    suspend fun signOut() {
+        // 🗑️ Limpiar token FCM antes de cerrar sesión
+        fcmTokenManager.clearFCMToken()
+        
         authRemoteDataSource.signOut()
     }
 

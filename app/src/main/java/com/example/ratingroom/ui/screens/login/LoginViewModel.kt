@@ -3,6 +3,7 @@ package com.example.ratingroom.ui.screens.login
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ratingroom.repository.AuthRepository
+import com.example.ratingroom.utils.FCMTokenManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,7 +13,8 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val fcmTokenManager: FCMTokenManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUIState())
@@ -70,6 +72,10 @@ class LoginViewModel @Inject constructor(
             )
                 .onSuccess { user ->
                     println("LoginViewModel: Login exitoso para uid=${user.uid}")
+                    
+                    // 🔔 Obtener y guardar token FCM después del login
+                    fcmTokenManager.refreshFCMToken()
+                    
                     _uiState.value = _uiState.value.copy(isLoading = false)
                     onSuccess()
                 }
