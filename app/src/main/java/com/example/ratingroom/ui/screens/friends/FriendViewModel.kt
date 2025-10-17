@@ -3,6 +3,7 @@ package com.example.ratingroom.ui.screens.friends
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.ratingroom.data.dtos.ReviewDto
 import com.example.ratingroom.repository.AuthRepository
 import com.example.ratingroom.ui.screens.profile.ProfileData
 import com.google.firebase.firestore.FieldPath
@@ -16,7 +17,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 @HiltViewModel
 class FriendViewModel @Inject constructor(
@@ -31,10 +33,12 @@ class FriendViewModel @Inject constructor(
     private var regFollowers: ListenerRegistration? = null
     private var regFollowing: ListenerRegistration? = null
     private var regAmIFollowing: ListenerRegistration? = null
+    private var regUserReviews: ListenerRegistration? = null
 
     fun load(userId: String) {
         targetUid = userId
         _ui.value = _ui.value.copy(isLoading = true, errorMessage = null)
+
         viewModelScope.launch {
             runCatching {
                 val doc = firestore.collection("users").document(userId).get().await()
@@ -54,8 +58,8 @@ class FriendViewModel @Inject constructor(
                     email = email,
                     memberSince = memberSince,
                     favoriteGenre = favorite,
-                    reviewsCount = 0,
-                    averageRating = 0.0,
+                    reviewsCount = 0,        // se recalcula con las reseñas en vivo
+                    averageRating = 0.0,     // idem
                     profileImageUrl = photo,
                     mainMovieId = (doc.get("mainMovieId") as? Number)?.toInt(),
                     followersCount = (doc.get("followersCount") as? Number)?.toInt() ?: 0,
@@ -65,11 +69,14 @@ class FriendViewModel @Inject constructor(
                 _ui.value = _ui.value.copy(isLoading = false, profile = profile)
                 observeCounts()
                 observeAmIFollowing()
+                observeUserReviews()   // ⬅️ reseñas en tiempo real
             }.onFailure { e ->
                 _ui.value = _ui.value.copy(isLoading = false, errorMessage = e.message ?: "Error")
             }
         }
     }
+
+    /* ---------------- Seguimiento / contadores ---------------- */
 
     private fun observeCounts() {
         clearCountListeners()
@@ -108,8 +115,8 @@ class FriendViewModel @Inject constructor(
             runCatching {
                 val myFollowing = firestore.collection("users").document(me)
                     .collection("following").document(target)
-                val isFollowing = _ui.value.isFollowing
-                if (isFollowing) {
+                val isFollowingNow = _ui.value.isFollowing
+                if (isFollowingNow) {
                     myFollowing.delete().await()
                     firestore.collection("users").document(target)
                         .collection("followers").document(me).delete().await()
@@ -161,9 +168,53 @@ class FriendViewModel @Inject constructor(
         regFollowing?.remove(); regFollowing = null
     }
 
+    /* ---------------- Reseñas del usuario visitado ---------------- */
+
+    private fun observeUserReviews() {
+        regUserReviews?.remove()
+        val uid = targetUid ?: return
+
+        _ui.value = _ui.value.copy(isLoadingReviews = true)
+        regUserReviews = firestore.collection("users")
+            .document(uid)
+            .collection("reviews")
+            .addSnapshotListener { snap, err ->
+                if (err != null) {
+                    Log.e("FriendVM", "observeUserReviews: ${err.message}", err)
+                    _ui.value = _ui.value.copy(isLoadingReviews = false)
+                    return@addSnapshotListener
+                }
+                val list = snap?.documents.orEmpty().map { d ->
+                    // Mapeo seguro a tu DTO
+                    ReviewDto(
+                        id = d.getString("id") ?: d.id,
+                        usuario_id = 0, // no lo usas aquí; si quieres, guarda el hash del uid
+                        pelicula_id = (d.get("movieId") as? Number)?.toInt() ?: 0,
+                        rating = (d.get("rating") as? Number)?.toInt() ?: 0,
+                        texto = d.getString("text") ?: "",
+                        // extras desnormalizados si existen:
+                        userName = d.getString("userName"),
+                        userImageUrl = d.getString("userImageUrl"),
+                        likes = (d.get("likes") as? Number)?.toInt() ?: 0
+                    )
+                }.sortedByDescending { it.id } // ordena como prefieras; si tienes createdAt, usa eso
+
+                val avg = if (list.isNotEmpty()) list.map { it.rating }.average() else 0.0
+                _ui.value = _ui.value.copy(
+                    isLoadingReviews = false,
+                    reviews = list,
+                    profile = _ui.value.profile?.copy(
+                        reviewsCount = list.size,
+                        averageRating = avg
+                    )
+                )
+            }
+    }
+
     override fun onCleared() {
         super.onCleared()
         clearCountListeners()
         regAmIFollowing?.remove(); regAmIFollowing = null
+        regUserReviews?.remove(); regUserReviews = null
     }
 }

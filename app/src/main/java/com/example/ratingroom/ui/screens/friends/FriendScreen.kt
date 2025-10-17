@@ -9,7 +9,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material3.*
@@ -19,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.ratingroom.data.dtos.ReviewDto
 import com.example.ratingroom.ui.screens.profile.ProfileData
 import com.example.ratingroom.ui.utils.AvatarInitials
 import com.example.ratingroom.ui.utils.GradientBackground
@@ -83,6 +83,8 @@ fun FriendScreen(
                         isFollowing = ui.isFollowing,
                         followersCount = ui.followersCount,
                         followingCount = ui.followingCount,
+                        isLoadingReviews = ui.isLoadingReviews,
+                        reviews = ui.reviews,
                         onFollowToggle = onFollowToggle,
                         onOpenFollowers = onOpenFollowers,
                         onOpenFollowing = onOpenFollowing
@@ -92,12 +94,8 @@ fun FriendScreen(
         }
     }
 
-    if (ui.showFollowers) {
-        NamesDialog("Seguidores", ui.followersNames, onCloseDialogs)
-    }
-    if (ui.showFollowing) {
-        NamesDialog("Siguiendo", ui.followingNames, onCloseDialogs)
-    }
+    if (ui.showFollowers) NamesDialog("Seguidores", ui.followersNames, onCloseDialogs)
+    if (ui.showFollowing) NamesDialog("Siguiendo", ui.followingNames, onCloseDialogs)
 }
 
 @Composable
@@ -106,6 +104,8 @@ private fun FriendContent(
     isFollowing: Boolean,
     followersCount: Int,
     followingCount: Int,
+    isLoadingReviews: Boolean,
+    reviews: List<ReviewDto>,
     onFollowToggle: () -> Unit,
     onOpenFollowers: () -> Unit,
     onOpenFollowing: () -> Unit
@@ -115,6 +115,7 @@ private fun FriendContent(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
+        // Cabecera del perfil
         item {
             ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(
@@ -159,6 +160,7 @@ private fun FriendContent(
             }
         }
 
+        // Métricas
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MetricCard(
@@ -173,6 +175,35 @@ private fun FriendContent(
                     onClick = onOpenFollowing,
                     modifier = Modifier.weight(1f)
                 )
+            }
+        }
+
+        // Reseñas
+        item {
+            Text(
+                "Reseñas",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+
+        if (isLoadingReviews) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) { CircularProgressIndicator() }
+            }
+        } else if (reviews.isEmpty()) {
+            item {
+                Text(
+                    "Este usuario aún no tiene reseñas.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            items(reviews, key = { it.id }) { r ->
+                ReviewCard(r)
             }
         }
     }
@@ -220,4 +251,15 @@ private fun NamesDialog(title: String, items: List<String>, onDismiss: () -> Uni
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
     )
+}
+
+@Composable
+private fun ReviewCard(r: ReviewDto) {
+    ElevatedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Text("⭐ ${r.rating}", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(6.dp))
+            Text(r.texto, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
 }
