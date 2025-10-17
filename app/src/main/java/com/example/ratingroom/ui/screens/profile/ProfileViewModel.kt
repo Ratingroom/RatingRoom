@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.ratingroom.repository.AuthRepository
 import com.example.ratingroom.repository.ReviewRepository
 import com.example.ratingroom.repository.UserProfile
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.async
@@ -21,11 +23,15 @@ import java.util.*
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val reviewRepository: ReviewRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val firestore: FirebaseFirestore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUIState(isLoading = false))
     val uiState: StateFlow<ProfileUIState> = _uiState.asStateFlow()
+
+    private var followersReg: ListenerRegistration? = null
+    private var followingReg: ListenerRegistration? = null
 
     init {
         loadProfileAndReviews()
@@ -67,6 +73,7 @@ class ProfileViewModel @Inject constructor(
                     averageRating = avg,
                     profileImageUrl = userProfile.profileImageUrl,
                     mainMovieId = userProfile.mainMovieId,
+                    // Inicializamos; se actualizarán en tiempo real abajo
                     followersCount = userProfile.followersCount ?: 0,
                     followingCount = userProfile.followingCount ?: 0
                 )
@@ -76,9 +83,11 @@ class ProfileViewModel @Inject constructor(
                     profileData = profileData,
                     reviews = reviews
                 )
-                
-                // Iniciar observación en tiempo real de las reseñas del usuario
+
+                // Reseñas en tiempo real
                 observeUserReviewsRealTime()
+                // ✅ Contadores de seguidores/seguidos en tiempo real
+                observeFollowCounts()
             }.onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -87,15 +96,15 @@ class ProfileViewModel @Inject constructor(
             }
         }
     }
-    
+
     private fun observeUserReviewsRealTime() {
         val userUid = authRepository.currentUser?.uid ?: return
-        
+
         viewModelScope.launch {
             reviewRepository.observeReviewsByUserUid(userUid).collectLatest { reviewsDto ->
                 val count = reviewsDto.size
                 val avg = if (count > 0) reviewsDto.map { it.rating }.average() else 0.0
-                
+
                 _uiState.value = _uiState.value.copy(
                     reviews = reviewsDto,
                     profileData = _uiState.value.profileData?.copy(
@@ -105,6 +114,48 @@ class ProfileViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    // 🔔 Observa en tiempo real /users/{uid}/followers y /following para mantener contadores actualizados
+    private fun observeFollowCounts() {
+        clearFollowListeners()
+
+        val uid = authRepository.currentUser?.uid ?: return
+
+        followersReg = firestore.collection("users")
+            .document(uid)
+            .collection("followers")
+            .addSnapshotListener { snap, err ->
+                if (err != null) {
+                    Log.e("ProfileVM", "followers listener error: ${err.message}", err)
+                    return@addSnapshotListener
+                }
+                val newCount = snap?.size() ?: 0
+                _uiState.value = _uiState.value.copy(
+                    profileData = _uiState.value.profileData?.copy(followersCount = newCount)
+                )
+            }
+
+        followingReg = firestore.collection("users")
+            .document(uid)
+            .collection("following")
+            .addSnapshotListener { snap, err ->
+                if (err != null) {
+                    Log.e("ProfileVM", "following listener error: ${err.message}", err)
+                    return@addSnapshotListener
+                }
+                val newCount = snap?.size() ?: 0
+                _uiState.value = _uiState.value.copy(
+                    profileData = _uiState.value.profileData?.copy(followingCount = newCount)
+                )
+            }
+    }
+
+    private fun clearFollowListeners() {
+        followersReg?.remove()
+        followingReg?.remove()
+        followersReg = null
+        followingReg = null
     }
 
     fun createReview(articuloId: Int, rating: Int, texto: String) {
@@ -189,22 +240,23 @@ class ProfileViewModel @Inject constructor(
 
     /** <-- esto es lo que MainActivity usa */
     fun logout() {
+        clearFollowListeners()
         authRepository.signOut()
     }
-    
-    // Funciones para manejar seguidores y seguidos
+
+    // ---------- Seguidores / Seguidos (listas) ----------
     private val _followers = MutableStateFlow<List<UserProfile>>(emptyList())
     val followers: StateFlow<List<UserProfile>> = _followers.asStateFlow()
-    
+
     private val _following = MutableStateFlow<List<UserProfile>>(emptyList())
     val following: StateFlow<List<UserProfile>> = _following.asStateFlow()
-    
+
     private val _isLoadingFollowers = MutableStateFlow(false)
     val isLoadingFollowers: StateFlow<Boolean> = _isLoadingFollowers.asStateFlow()
-    
+
     private val _isLoadingFollowing = MutableStateFlow(false)
     val isLoadingFollowing: StateFlow<Boolean> = _isLoadingFollowing.asStateFlow()
-    
+
     fun loadFollowers() {
         viewModelScope.launch {
             _isLoadingFollowers.value = true
@@ -220,7 +272,7 @@ class ProfileViewModel @Inject constructor(
             _isLoadingFollowers.value = false
         }
     }
-    
+
     fun loadFollowing() {
         viewModelScope.launch {
             _isLoadingFollowing.value = true
@@ -236,22 +288,14 @@ class ProfileViewModel @Inject constructor(
             _isLoadingFollowing.value = false
         }
     }
-    
+
     fun followUser(userId: String) {
         viewModelScope.launch {
             authRepository.followUser(userId)
                 .onSuccess { success ->
                     if (success) {
-                        // Actualizar contador de seguidos
-                        _uiState.value.profileData?.let { profileData ->
-                            _uiState.value = _uiState.value.copy(
-                                profileData = profileData.copy(
-                                    followingCount = profileData.followingCount + 1
-                                )
-                            )
-                        }
-                        // Recargar la lista de seguidos
-                        loadFollowing()
+                        // El listener en tiempo real ajustará el contador.
+                        loadFollowing() // refresca la lista
                     }
                 }
                 .onFailure { e ->
@@ -261,22 +305,14 @@ class ProfileViewModel @Inject constructor(
                 }
         }
     }
-    
+
     fun unfollowUser(userId: String) {
         viewModelScope.launch {
             authRepository.unfollowUser(userId)
                 .onSuccess { success ->
                     if (success) {
-                        // Actualizar contador de seguidos
-                        _uiState.value.profileData?.let { profileData ->
-                            _uiState.value = _uiState.value.copy(
-                                profileData = profileData.copy(
-                                    followingCount = (profileData.followingCount - 1).coerceAtLeast(0)
-                                )
-                            )
-                        }
-                        // Recargar la lista de seguidos
-                        loadFollowing()
+                        // El listener en tiempo real ajustará el contador.
+                        loadFollowing() // refresca la lista
                     }
                 }
                 .onFailure { e ->
@@ -285,5 +321,10 @@ class ProfileViewModel @Inject constructor(
                     )
                 }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        clearFollowListeners()
     }
 }
