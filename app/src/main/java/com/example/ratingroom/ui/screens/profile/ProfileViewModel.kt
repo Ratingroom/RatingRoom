@@ -37,7 +37,6 @@ class ProfileViewModel @Inject constructor(
         loadProfileAndReviews()
     }
 
-    /** <-- wrapper para compatibilidad con MainActivity */
     fun loadProfile() = loadProfileAndReviews()
 
     fun refresh() = loadProfileAndReviews()
@@ -73,20 +72,20 @@ class ProfileViewModel @Inject constructor(
                     averageRating = avg,
                     profileImageUrl = userProfile.profileImageUrl,
                     mainMovieId = userProfile.mainMovieId,
-                    // Inicializamos; se actualizarán en tiempo real abajo
                     followersCount = userProfile.followersCount ?: 0,
                     followingCount = userProfile.followingCount ?: 0
                 )
 
+                // ✅ Verificar integridad básica de los datos del usuario
+                val perfilVerificado = verificarIntegridadDatos(profileData)
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    profileData = profileData,
+                    profileData = perfilVerificado,
                     reviews = reviews
                 )
 
-                // Reseñas en tiempo real
                 observeUserReviewsRealTime()
-                // ✅ Contadores de seguidores/seguidos en tiempo real
                 observeFollowCounts()
             }.onFailure { e ->
                 _uiState.value = _uiState.value.copy(
@@ -116,10 +115,8 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    // 🔔 Observa en tiempo real /users/{uid}/followers y /following para mantener contadores actualizados
     private fun observeFollowCounts() {
         clearFollowListeners()
-
         val uid = authRepository.currentUser?.uid ?: return
 
         followersReg = firestore.collection("users")
@@ -238,13 +235,38 @@ class ProfileViewModel @Inject constructor(
     private fun currentUserIdForUi(): Int =
         authRepository.currentUser?.uid?.hashCode() ?: 0
 
-    /** <-- esto es lo que MainActivity usa */
     fun logout() {
         clearFollowListeners()
         authRepository.signOut()
     }
 
-    // ---------- Seguidores / Seguidos (listas) ----------
+    // ---------- Función en línea: mejora integridad ----------
+    private fun verificarIntegridadDatos(profile: ProfileData): ProfileData {
+        var datos = profile
+
+        // Validar nombre
+        if (datos.name.isBlank() || datos.name == "Usuario") {
+            datos = datos.copy(name = "Usuario sin nombre")
+        }
+
+        // Validar email
+        if (datos.email.isNullOrBlank() || !datos.email.contains("@")) {
+            datos = datos.copy(email = "email_invalido@ratingroom.com")
+        }
+
+        // Validar valores negativos o nulos
+        val followers = if (datos.followersCount < 0) 0 else datos.followersCount
+        val following = if (datos.followingCount < 0) 0 else datos.followingCount
+        val avgRating = if (datos.averageRating.isNaN()) 0.0 else datos.averageRating
+
+        return datos.copy(
+            followersCount = followers,
+            followingCount = following,
+            averageRating = avgRating
+        )
+    }
+
+    // ---------- Seguidores / Seguidos ----------
     private val _followers = MutableStateFlow<List<UserProfile>>(emptyList())
     val followers: StateFlow<List<UserProfile>> = _followers.asStateFlow()
 
@@ -293,10 +315,7 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.followUser(userId)
                 .onSuccess { success ->
-                    if (success) {
-                        // El listener en tiempo real ajustará el contador.
-                        loadFollowing() // refresca la lista
-                    }
+                    if (success) loadFollowing()
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
@@ -310,10 +329,7 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.unfollowUser(userId)
                 .onSuccess { success ->
-                    if (success) {
-                        // El listener en tiempo real ajustará el contador.
-                        loadFollowing() // refresca la lista
-                    }
+                    if (success) loadFollowing()
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
