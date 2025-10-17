@@ -9,29 +9,64 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.example.ratingroom.data.models.Friend
+import com.example.ratingroom.data.models.FriendshipType
 
 @HiltViewModel
-class FriendsViewModel @Inject constructor() : ViewModel() {
-    
+class FriendsViewModel @Inject constructor(
+    private val friendsRepository: FriendsRepository
+) : ViewModel() {
+
     private val _uiState = MutableStateFlow(FriendsUIState())
     val uiState: StateFlow<FriendsUIState> = _uiState.asStateFlow()
-    
+
     init {
         loadFriendsData()
     }
-    
+
     private fun loadFriendsData() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            
+
             try {
-                val friends = FriendsRepository.getFriends()
-                val suggestions = FriendsRepository.getSuggestions()
-                val followers = FriendsRepository.getFollowers()
-                
+                // Obtener listas desde Firestore mediante el repositorio
+                val followingRaw = friendsRepository.getFollowing()
+                val followersRaw = friendsRepository.getFollowers()
+                val suggestionsRaw = friendsRepository.getSuggestions()
+
+                val followingUids = followingRaw.mapNotNull { it.uid }.toSet()
+                val followersUids = followersRaw.mapNotNull { it.uid }.toSet()
+
+                // Enriquecer con relationshipType según pertenencia en las listas
+                val following = followingRaw.map { f ->
+                    val isMutual = followersUids.contains(f.uid)
+                    f.copy(
+                        relationshipType = if (isMutual) FriendshipType.MUTUAL else FriendshipType.FOLLOWING,
+                        isFollowing = true
+                    )
+                }
+
+                val followers = followersRaw.map { f ->
+                    val isMutual = followingUids.contains(f.uid)
+                    f.copy(
+                        relationshipType = if (isMutual) FriendshipType.MUTUAL else FriendshipType.FOLLOWER,
+                        isFollowing = isMutual
+                    )
+                }
+
+                val suggestions = suggestionsRaw
+                    .filter { it.uid !in followingUids && it.uid !in followersUids }
+                    .map { s ->
+                        s.copy(
+                            relationshipType = FriendshipType.NONE,
+                            isFollowing = false,
+                            isFriend = false
+                        )
+                    }
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    friends = friends,
+                    friends = following,
                     suggestions = suggestions,
                     followers = followers
                 )
@@ -43,24 +78,32 @@ class FriendsViewModel @Inject constructor() : ViewModel() {
             }
         }
     }
-    
+
     fun onSearchQueryChange(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
         // Implementar búsqueda
     }
-    
+
     fun onTabSelected(tab: Int) {
         _uiState.value = _uiState.value.copy(selectedTab = tab)
     }
-    
-    fun onFriendAction(friendId: Int, action: String) {
+
+    fun onFriendAction(friend: Friend, action: String) {
         viewModelScope.launch {
             try {
+                val targetUid = friend.uid
+                if (targetUid.isNullOrBlank()) {
+                    _uiState.value = _uiState.value.copy(errorMessage = "UID de usuario no disponible")
+                    return@launch
+                }
                 when (action) {
-                    "add_friend" -> FriendsRepository.addFriend(friendId)
-                    "remove_friend" -> FriendsRepository.removeFriend(friendId)
-                    "follow" -> FriendsRepository.followUser(friendId)
-                    "unfollow" -> FriendsRepository.unfollowUser(friendId)
+                    // Compatibilidad con versiones anteriores del UI
+                    "add_friend" -> friendsRepository.followUser(targetUid)
+                    "remove_friend" -> friendsRepository.unfollowUser(targetUid)
+                    // Acciones principales
+                    "follow" -> friendsRepository.followUser(targetUid)
+                    "unfollow" -> friendsRepository.unfollowUser(targetUid)
+                    "follow_back" -> friendsRepository.followUser(targetUid)
                 }
                 loadFriendsData() // Recargar datos
             } catch (e: Exception) {
@@ -68,7 +111,7 @@ class FriendsViewModel @Inject constructor() : ViewModel() {
             }
         }
     }
-    
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
