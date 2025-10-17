@@ -33,7 +33,7 @@ import com.example.ratingroom.data.models.FriendshipType
 @Composable
 fun FriendsScreen(
     onBack: () -> Unit = {},
-    onUserClick: (String) -> Unit,                 // 👈 nuevo parámetro expuesto
+    onUserClick: (String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: FriendsViewModel = hiltViewModel()
 ) {
@@ -44,7 +44,7 @@ fun FriendsScreen(
         onSearchQueryChange = viewModel::onSearchQueryChange,
         onTabSelected = viewModel::onTabSelected,
         onFriendAction = { friend, action -> viewModel.onFriendAction(friend, action) },
-        onUserClick = onUserClick,                 // 👈 propagamos
+        onUserClick = onUserClick,
         modifier = modifier
     )
 }
@@ -56,12 +56,10 @@ fun FriendsScreenContent(
     onSearchQueryChange: (String) -> Unit,
     onTabSelected: (Int) -> Unit,
     onFriendAction: (Friend, String) -> Unit,
-    onUserClick: (String) -> Unit,                 // 👈 nuevo
+    onUserClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier.fillMaxSize()
-    ) {
+    Column(modifier = modifier.fillMaxSize()) {
         // Header con estadísticas
         Box(
             modifier = Modifier
@@ -76,7 +74,6 @@ fun FriendsScreenContent(
                 )
                 .padding(16.dp)
         ) {
-            // Calcula contadores dinámicos
             val followingCount = uiState.friends.size
             val followersCount = uiState.followers.size
             val mutualCount = uiState.friends.count { f ->
@@ -95,7 +92,6 @@ fun FriendsScreenContent(
             }
         }
 
-        // Contenido principal
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,
@@ -123,19 +119,17 @@ fun FriendsScreenContent(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 when (uiState.selectedTab) {
-                    0 -> {
-                        ActivityTab(
-                            searchQuery = uiState.searchQuery,
-                            onFriendAction = onFriendAction,
-                            onUserClick = onUserClick,      // 👈 propagamos
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
+                    0 -> ActivityTab(
+                        searchQuery = uiState.searchQuery,
+                        onFriendAction = onFriendAction,
+                        onUserClick = onUserClick,
+                        modifier = Modifier.fillMaxSize()
+                    )
                     else -> {
                         val currentList = when (uiState.selectedTab) {
-                            1 -> uiState.friends           // Siguiendo
-                            2 -> uiState.followers         // Seguidores
-                            3 -> uiState.suggestions       // Descubrir
+                            1 -> uiState.friends
+                            2 -> uiState.followers
+                            3 -> uiState.suggestions
                             else -> emptyList()
                         }
                         FriendsListTab(
@@ -143,7 +137,7 @@ fun FriendsScreenContent(
                             searchQuery = uiState.searchQuery,
                             friends = currentList,
                             onFriendAction = onFriendAction,
-                            onUserClick = onUserClick,      // 👈 propagamos
+                            onUserClick = onUserClick,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -154,15 +148,8 @@ fun FriendsScreenContent(
 }
 
 @Composable
-fun StatItem(
-    number: String,
-    label: String,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+fun StatItem(number: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = number,
             fontSize = 24.sp,
@@ -178,10 +165,7 @@ fun StatItem(
 }
 
 @Composable
-fun FriendsTabRow(
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit
-) {
+fun FriendsTabRow(selectedTab: Int, onTabSelected: (Int) -> Unit) {
     val tabs = listOf("Actividad", "Siguiendo", "Seguidores", "Descubrir")
 
     ScrollableTabRow(
@@ -219,26 +203,20 @@ fun FriendsTabRow(
 fun ActivityTab(
     searchQuery: String,
     onFriendAction: (Friend, String) -> Unit,
-    onUserClick: (String) -> Unit,                // 👈 nuevo
+    onUserClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val friendsActivity = remember { FriendsRepository.getFriendsActivity() }
 
     val filteredActivity = remember(searchQuery) {
-        if (searchQuery.isBlank()) {
-            friendsActivity
-        } else {
-            friendsActivity.filter {
-                it.friend.name.contains(searchQuery, ignoreCase = true) ||
-                        it.movie.contains(searchQuery, ignoreCase = true)
-            }
+        if (searchQuery.isBlank()) friendsActivity
+        else friendsActivity.filter {
+            it.friend.name.contains(searchQuery, ignoreCase = true) ||
+                    it.movie.contains(searchQuery, ignoreCase = true)
         }
     }
 
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = modifier
-    ) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = modifier) {
         if (filteredActivity.isEmpty()) {
             item {
                 EmptyActivityState(
@@ -249,12 +227,9 @@ fun ActivityTab(
             }
         } else {
             items(filteredActivity) { activity ->
-                // 👇 sin tocar el composable interno: hacemos clickable toda la tarjeta
-                Box(
-                    modifier = Modifier.clickable {
-                        onUserClick(activity.friend.uid ?: activity.friend.id.toString())
-                    }
-                ) {
+                Box(modifier = Modifier.clickable {
+                    onUserClick(activity.friend.uid ?: activity.friend.id.toString())
+                }) {
                     FriendActivityCard(
                         activity = activity,
                         onAction = { action -> onFriendAction(activity.friend, action) }
@@ -271,24 +246,18 @@ fun FriendsListTab(
     searchQuery: String,
     friends: List<Friend>,
     onFriendAction: (Friend, String) -> Unit,
-    onUserClick: (String) -> Unit,                // 👈 nuevo
+    onUserClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val friendsList = remember(friends, searchQuery) {
-        if (searchQuery.isBlank()) {
-            friends
-        } else {
-            friends.filter { friend ->
-                friend.name.contains(searchQuery, ignoreCase = true) ||
-                        friend.username.contains(searchQuery, ignoreCase = true)
-            }
+        if (searchQuery.isBlank()) friends
+        else friends.filter {
+            it.name.contains(searchQuery, ignoreCase = true) ||
+                    it.username.contains(searchQuery, ignoreCase = true)
         }
     }
 
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = modifier
-    ) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = modifier) {
         if (friendsList.isEmpty()) {
             item {
                 EmptyFriendsState(
@@ -311,38 +280,20 @@ fun FriendsListTab(
     }
 }
 
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun PreviewFriendsScreen() {
-    RatingRoomTheme {
-        FriendsScreenContent(
-            uiState = FriendsUIState(
-                searchQuery = "",
-                selectedTab = 0,
-                friends = emptyList(),
-                suggestions = emptyList(),
-                followers = emptyList()
-            ),
-            onSearchQueryChange = {},
-            onTabSelected = {},
-            onFriendAction = { _, _ -> },
-            onUserClick = {}
-        )
-    }
-}
-
 @Composable
 fun FriendCard(
     friend: Friend,
     tabIndex: Int,
     onAction: (String) -> Unit,
-    onUserClick: (String) -> Unit,               // 👈 ya estaba en nuestra versión previa
+    onUserClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onUserClick(friend.uid ?: friend.id.toString()) }, // ✅ cambio clave
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant)
     ) {
@@ -353,31 +304,17 @@ fun FriendCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Avatar
-            Box {
-                Surface(
-                    shape = CircleShape,
-                    color = cs.surfaceVariant,
-                    modifier = Modifier.size(50.dp)
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = friend.name.first().toString(),
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = cs.onSurfaceVariant
-                        )
-                    }
-                }
-
-                if (friend.isOnline) {
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .background(cs.tertiary, CircleShape)
-                            .align(Alignment.BottomEnd)
+            Surface(
+                shape = CircleShape,
+                color = cs.surfaceVariant,
+                modifier = Modifier.size(50.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = friend.name.first().toString(),
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = cs.onSurfaceVariant
                     )
                 }
             }
@@ -398,134 +335,16 @@ fun FriendCard(
                     fontSize = 14.sp,
                     color = cs.onSurfaceVariant
                 )
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (friend.isOnline) {
-                        Text(
-                            text = "En línea",
-                            fontSize = 12.sp,
-                            color = cs.tertiary
-                        )
-                    } else {
-                        Text(
-                            text = "Visto por última vez ${friend.lastSeen}",
-                            fontSize = 12.sp,
-                            color = cs.onSurfaceVariant
-                        )
-                    }
-                }
-
-                if (friend.mutualFriends > 0) {
-                    Text(
-                        text = "${friend.mutualFriends} amigos en común",
-                        fontSize = 12.sp,
-                        color = cs.onSurfaceVariant
-                    )
-                }
             }
 
-            Column {
-                if (tabIndex == 1) {
-                    // En pestaña "Siguiendo" siempre permitir dejar de seguir
-                    IconButton(onClick = { onAction("unfollow") }) {
-                        Icon(
-                            Icons.Default.PersonRemove,
-                            contentDescription = "Dejar de seguir",
-                            tint = cs.error
-                        )
-                    }
-                } else {
-                    when (friend.relationshipType) {
-                        FriendshipType.MUTUAL -> {
-                            // En Seguidores o Descubrir no mostrar seguir si es mutuo
-                            IconButton(onClick = { onAction("message") }) {
-                                Icon(
-                                    Icons.Default.Message,
-                                    contentDescription = "Mensaje",
-                                    tint = cs.onSurface
-                                )
-                            }
-                        }
-                        FriendshipType.FOLLOWING -> {
-                            IconButton(onClick = { onAction("unfollow") }) {
-                                Icon(
-                                    Icons.Default.PersonRemove,
-                                    contentDescription = "Dejar de seguir",
-                                    tint = cs.error
-                                )
-                            }
-                        }
-                        FriendshipType.FOLLOWER -> {
-                            IconButton(onClick = { onAction("follow") }) {
-                                Icon(
-                                    Icons.Default.PersonAdd,
-                                    contentDescription = "Seguir",
-                                    tint = cs.tertiary
-                                )
-                            }
-                        }
-                        FriendshipType.NONE, FriendshipType.FRIEND -> {
-                            IconButton(onClick = { onAction("follow") }) {
-                                Icon(
-                                    Icons.Default.PersonAdd,
-                                    contentDescription = "Seguir",
-                                    tint = cs.onSurface
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Navega al perfil del amigo
-                IconButton(onClick = { onUserClick(friend.uid ?: friend.id.toString()) }) {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = "Ver perfil",
-                        tint = cs.onSurfaceVariant
-                    )
-                }
+            // Botón seguir / mensaje / perfil
+            IconButton(onClick = { onUserClick(friend.uid ?: friend.id.toString()) }) {
+                Icon(
+                    Icons.Default.Person,
+                    contentDescription = "Ver perfil",
+                    tint = cs.onSurfaceVariant
+                )
             }
         }
-    }
-}
-
-@Composable
-fun EmptyFriendsState(
-    tabIndex: Int,
-    modifier: Modifier = Modifier
-) {
-    val cs = MaterialTheme.colorScheme
-    val (message, icon) = when (tabIndex) {
-        0 -> "Sin actividad reciente" to Icons.Default.Group
-        1 -> "Aún no sigues a nadie" to Icons.Default.PersonAdd
-        2 -> "Aún no tienes seguidores" to Icons.Default.People
-        3 -> "Descubre nuevos amigos" to Icons.Default.Search
-        else -> "" to Icons.Default.Group
-    }
-
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = cs.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = message,
-            fontSize = 18.sp,
-            color = cs.onSurfaceVariant,
-            fontWeight = FontWeight.Medium
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Busca y agrega a tu primer amigo",
-            fontSize = 14.sp,
-            color = cs.onSurfaceVariant
-        )
     }
 }

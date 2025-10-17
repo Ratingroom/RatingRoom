@@ -1,24 +1,27 @@
 package com.example.ratingroom.ui.screens.friends
 
 import com.example.ratingroom.data.dtos.ReviewDto
-
-data class FriendProfileData(
-    val uid: String = "",
-    val name: String = "Usuario",
-    val email: String = "",
-    val memberSince: String? = null,
-    val favoriteGenre: String? = null,
-    val profileImageUrl: String? = null,
-    val biography: String? = null,
-    val location: String? = null,
-    val website: String? = null,
-    val mainMovieId: Int? = null // 🎬 ID de la película principal
-)
+import com.example.ratingroom.ui.screens.profile.ProfileData
 
 data class FriendUIState(
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
     val errorMessage: String? = null,
-    val profile: FriendProfileData? = null,
+
+    // Perfil del usuario visitado
+    val profile: ProfileData? = null,
+
+    // Seguir / contadores
+    val isFollowing: Boolean = false,
+    val followersCount: Int = 0,
+    val followingCount: Int = 0,
+
+    // Diálogos
+    val showFollowers: Boolean = false,
+    val showFollowing: Boolean = false,
+    val followersNames: List<String> = emptyList(),
+    val followingNames: List<String> = emptyList(),
+
+    // Reseñas del usuario visitado
     val isLoadingReviews: Boolean = false,
     val reviews: List<ReviewDto> = emptyList()
 )

@@ -20,7 +20,25 @@ class FirestoreDataSourceImpl @Inject constructor(
     private val currentUserId: String?
         get() = authService.currentUser?.uid
 
-    // ---------------- Perfil ----------------
+    // ---------------- PERFIL ----------------
+    override suspend fun createUserDocument(
+        userId: String,
+        email: String,
+        fullName: String?,
+        favoriteGenre: String?,
+        birthYear: String?
+    ) {
+        val data = mutableMapOf<String, Any>(
+            "email" to email,
+            "createdAt" to System.currentTimeMillis(),
+            "updatedAt" to System.currentTimeMillis()
+        )
+        fullName?.let { data["fullName"] = it }
+        favoriteGenre?.let { data["favoriteGenre"] = it }
+        birthYear?.let { data["birthYear"] = it }
+
+        firestoreService.collection("users").document(userId).set(data).await()
+    }
 
     override suspend fun updateUserProfile(
         displayName: String?,
@@ -47,101 +65,85 @@ class FirestoreDataSourceImpl @Inject constructor(
         mainMovieId?.let { updates["mainMovieId"] = it }
         updates["updatedAt"] = System.currentTimeMillis()
 
-        if (updates.isNotEmpty()) {
-            val docRef = firestoreService.collection("users").document(userId)
-            val snapshot = docRef.get().await()
-            if (snapshot.exists()) {
-                docRef.update(updates).await()
-            } else {
-                updates["createdAt"] = System.currentTimeMillis()
-                docRef.set(updates).await()
-            }
+        val docRef = firestoreService.collection("users").document(userId)
+        val snapshot = docRef.get().await()
+        if (snapshot.exists()) {
+            docRef.update(updates).await()
+        } else {
+            updates["createdAt"] = System.currentTimeMillis()
+            docRef.set(updates).await()
         }
     }
 
     override suspend fun getUserProfile(): Map<String, Any>? {
         val userId = currentUserId ?: return null
-        val document = firestoreService.collection("users")
-            .document(userId)
-            .get()
-            .await()
-        return if (document.exists()) document.data else null
+        val doc = firestoreService.collection("users").document(userId).get().await()
+        return if (doc.exists()) doc.data else null
     }
 
     override suspend fun getUserProfileById(userId: String): Map<String, Any>? {
-        val document = firestoreService.collection("users")
-            .document(userId)
-            .get()
-            .await()
-        return if (document.exists()) document.data else null
+        val doc = firestoreService.collection("users").document(userId).get().await()
+        return if (doc.exists()) doc.data else null
     }
 
-    override suspend fun createUserDocument(
-        userId: String,
-        email: String,
-        fullName: String?,
-        favoriteGenre: String?,
-        birthYear: String?
-    ) {
-        val data = mutableMapOf<String, Any>(
-            "email" to email,
-            "createdAt" to System.currentTimeMillis(),
-            "updatedAt" to System.currentTimeMillis()
-        )
-        fullName?.let { data["fullName"] = it }
-        favoriteGenre?.let { data["favoriteGenre"] = it }
-        birthYear?.let { data["birthYear"] = it }
-
-        firestoreService.collection("users")
-            .document(userId)
-            .set(data)
-            .await()
+    // ---------------- USUARIOS ----------------
+    override suspend fun getAllUsers(): List<Map<String, Any>> {
+        return try {
+            val snap = firestoreService.collection("users").get().await()
+            snap.documents.mapNotNull { doc ->
+                doc.data?.toMutableMap()?.apply {
+                    this["uid"] = doc.id
+                    if (!this.containsKey("email")) this["email"] = ""
+                    if (!this.containsKey("fullName")) {
+                        this["fullName"] = (this["displayName"] as? String).orEmpty()
+                    }
+                    if (!this.containsKey("username")) {
+                        val email = (this["email"] as? String).orEmpty()
+                        this["username"] =
+                            if (email.contains("@")) email.substringBefore("@") else ""
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getAllUsers: ${e.message}", e)
+            emptyList()
+        }
     }
 
-    // ---------------- Reseñas ----------------
-
+    // ---------------- RESEÑAS ----------------
     override suspend fun createReviewFanout(
         userId: String,
         movieId: Int,
         rating: Int,
         text: String
     ): String {
-        // 1) Obtener información del usuario para desnormalizar
         val userProfile = getUserProfileById(userId)
         val userName = userProfile?.get("fullName") as? String ?: "Usuario"
         val userImageUrl = userProfile?.get("profileImageUrl") as? String
-        
-        // 2) Crea documento raíz en /reviews
+
         val reviewDoc = firestoreService.collection("reviews").document()
         val now = System.currentTimeMillis()
+
         val reviewData = mapOf(
             "id" to reviewDoc.id,
             "userId" to userId,
             "movieId" to movieId,
             "rating" to rating,
             "text" to text,
+            "likes" to 0,
             "createdAt" to now,
             "updatedAt" to now,
-            // 🎯 Desnormalización: información del usuario
             "userName" to userName,
             "userImageUrl" to (userImageUrl ?: "")
         )
 
-        // Escritura inicial
         reviewDoc.set(reviewData).await()
 
-        // 3) Fanout a /users/{uid}/reviews/{reviewId}
         firestoreService.collection("users")
             .document(userId)
             .collection("reviews")
             .document(reviewDoc.id)
             .set(reviewData)
-            .await()
-
-        // 4) Fanout a /movies/{movieId}/reviews/{reviewId}
-        firestoreService.collection("movies")
-            .document(movieId.toString())
-            .set(mapOf("updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge())
             .await()
 
         firestoreService.collection("movies")
@@ -164,32 +166,9 @@ class FirestoreDataSourceImpl @Inject constructor(
         return snapshot.documents.mapNotNull { doc ->
             doc.data?.toMutableMap()?.apply {
                 if (this["id"] == null) this["id"] = doc.id
+                if (this["likes"] == null) this["likes"] = 0
             }
         }
-    }
-    
-    override fun observeReviewsByMovie(movieId: Int): Flow<List<Map<String, Any>>> = callbackFlow {
-        val reviewsRef = firestoreService.collection("movies")
-            .document(movieId.toString())
-            .collection("reviews")
-            
-        val subscription = reviewsRef.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                Log.e("FirestoreDataSource", "Error observando reseñas: ${error.message}", error)
-                return@addSnapshotListener
-            }
-            
-            if (snapshot != null) {
-                val reviews = snapshot.documents.mapNotNull { doc ->
-                    doc.data?.toMutableMap()?.apply {
-                        if (this["id"] == null) this["id"] = doc.id
-                    }
-                }
-                trySend(reviews)
-            }
-        }
-        
-        awaitClose { subscription.remove() }
     }
 
     override suspend fun getReviewsByUser(userId: String): List<Map<String, Any>> {
@@ -202,257 +181,283 @@ class FirestoreDataSourceImpl @Inject constructor(
         return snapshot.documents.mapNotNull { doc ->
             doc.data?.toMutableMap()?.apply {
                 if (this["id"] == null) this["id"] = doc.id
+                if (this["likes"] == null) this["likes"] = 0
             }
         }
     }
-    
-    override fun observeReviewsByUser(userId: String): Flow<List<Map<String, Any>>> = callbackFlow {
-        val reviewsRef = firestoreService.collection("users")
-            .document(userId)
+
+    override fun observeReviewsByMovie(movieId: Int): Flow<List<Map<String, Any>>> = callbackFlow {
+        val ref = firestoreService.collection("movies")
+            .document(movieId.toString())
             .collection("reviews")
-            
-        val subscription = reviewsRef.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                Log.e("FirestoreDataSource", "Error observando reseñas de usuario: ${error.message}", error)
+
+        val listener = ref.addSnapshotListener { snap, err ->
+            if (err != null) {
+                Log.e("Firestore", "Error observando reseñas: ${err.message}")
                 return@addSnapshotListener
             }
-            
-            if (snapshot != null) {
-                val reviews = snapshot.documents.mapNotNull { doc ->
+            if (snap != null) {
+                val list = snap.documents.mapNotNull { doc ->
                     doc.data?.toMutableMap()?.apply {
                         if (this["id"] == null) this["id"] = doc.id
+                        if (this["likes"] == null) this["likes"] = 0
                     }
                 }
-                trySend(reviews)
+                trySend(list)
             }
         }
-        
-        awaitClose { subscription.remove() }
+        awaitClose { listener.remove() }
     }
 
-    override suspend fun sendOrDeleteLike(reviewId: String, userId: String): Boolean {
-        val reviewRef = firestoreService.collection("reviews").document(reviewId)
-        val likesRef = reviewRef.collection("likes").document(userId)
+    override fun observeReviewsByUser(userId: String): Flow<List<Map<String, Any>>> = callbackFlow {
+        val ref = firestoreService.collection("users")
+            .document(userId)
+            .collection("reviews")
 
-        return firestoreService.runTransaction { transaction ->
-            val likeDoc = transaction.get(likesRef)
-            
-            if (likeDoc.exists()) {
-                transaction.delete(likesRef)
-                transaction.set(reviewRef, mapOf("likes" to FieldValue.increment(-1)), com.google.firebase.firestore.SetOptions.merge())
-                false
-            } else {
-                transaction.set(likesRef, mapOf("timestamp" to FieldValue.serverTimestamp()))
-                transaction.set(reviewRef, mapOf("likes" to FieldValue.increment(1)), com.google.firebase.firestore.SetOptions.merge())
-                true
+        val listener = ref.addSnapshotListener { snap, err ->
+            if (err != null) {
+                Log.e("Firestore", "Error observando reseñas de usuario: ${err.message}")
+                return@addSnapshotListener
             }
-        }.await()
+            if (snap != null) {
+                val list = snap.documents.mapNotNull { doc ->
+                    doc.data?.toMutableMap()?.apply {
+                        if (this["id"] == null) this["id"] = doc.id
+                        if (this["likes"] == null) this["likes"] = 0
+                    }
+                }
+                trySend(list)
+            }
+        }
+        awaitClose { listener.remove() }
     }
 
-    // ---------------- Películas ----------------
+    // ✅ Like toggle + notificación al autor
+    override suspend fun sendOrDeleteLike(reviewId: String, userId: String): Boolean {
+        val rootRef = firestoreService.collection("reviews").document(reviewId)
+        val rootSnap = rootRef.get().await()
+        if (!rootSnap.exists()) throw IllegalStateException("Review no encontrada: $reviewId")
 
+        val data = rootSnap.data ?: emptyMap()
+        val movieId = (data["movieId"] as? Number)?.toInt()
+            ?: (data["movieId"] as? String)?.toIntOrNull()
+            ?: throw IllegalStateException("movieId no encontrado en review $reviewId")
+        val authorUid = data["userId"] as? String
+            ?: throw IllegalStateException("userId no encontrado en review $reviewId")
+
+        val movieReviewRef = firestoreService.collection("movies")
+            .document(movieId.toString()).collection("reviews").document(reviewId)
+        val userReviewRef = firestoreService.collection("users")
+            .document(authorUid).collection("reviews").document(reviewId)
+        val likeDocRef = rootRef.collection("likes").document(userId)
+        val mirrorLikeRef = firestoreService.collection("users")
+            .document(userId).collection("likes").document(reviewId)
+
+        val adding = firestoreService.runTransaction { tx ->
+            val likeDoc = tx.get(likeDocRef)
+            val addingLocal = !likeDoc.exists()
+            val rootData = tx.get(rootRef).data ?: emptyMap()
+            val currentLikes = (rootData["likes"] as? Number)?.toInt() ?: 0
+            val newCount = if (addingLocal) currentLikes + 1 else maxOf(currentLikes - 1, 0)
+
+            if (addingLocal) {
+                tx.set(likeDocRef, mapOf("timestamp" to FieldValue.serverTimestamp()))
+                tx.set(mirrorLikeRef, mapOf("timestamp" to FieldValue.serverTimestamp()))
+            } else {
+                tx.delete(likeDocRef)
+                tx.delete(mirrorLikeRef)
+            }
+
+            val update = mapOf("likes" to newCount)
+            tx.set(rootRef, update, SetOptions.merge())
+            tx.set(movieReviewRef, update, SetOptions.merge())
+            tx.set(userReviewRef, update, SetOptions.merge())
+
+            addingLocal
+        }.await()
+
+        // Crear notificación SOLO cuando se añade el like y no es auto-like
+        if (adding && authorUid != userId) {
+            createNotification(
+                targetUserId = authorUid,
+                payload = mapOf(
+                    "type" to "like",
+                    "actorUserId" to (currentUserId ?: userId),
+                    "actorName" to (getUserProfile()?.get("fullName") as? String ?: "Alguien"),
+                    "reviewId" to reviewId,
+                    "movieId" to movieId,
+                    "seen" to false,
+                    "createdAt" to System.currentTimeMillis()
+                )
+            )
+        }
+
+        return adding
+    }
+
+    // ---------------- NOTIFICACIONES ----------------
+    override fun observeNotifications(userId: String): Flow<List<Map<String, Any>>> = callbackFlow {
+        val ref = firestoreService.collection("users")
+            .document(userId)
+            .collection("notifications")
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+
+        val listener = ref.addSnapshotListener { snap, err ->
+            if (err != null) {
+                Log.e("Firestore", "Error observando notificaciones: ${err.message}")
+                return@addSnapshotListener
+            }
+            if (snap != null) {
+                val list = snap.documents.mapNotNull { d ->
+                    d.data?.toMutableMap()?.apply { if (this["id"] == null) this["id"] = d.id }
+                }
+                trySend(list)
+            }
+        }
+        awaitClose { listener.remove() }
+    }
+
+    override suspend fun markNotificationSeen(userId: String, notificationId: String) {
+        firestoreService.collection("users")
+            .document(userId)
+            .collection("notifications")
+            .document(notificationId)
+            .set(mapOf("seen" to true), SetOptions.merge())
+            .await()
+    }
+
+    override suspend fun markAllNotificationsSeen(userId: String) {
+        val ref = firestoreService.collection("users")
+            .document(userId)
+            .collection("notifications")
+        val snap = ref.get().await()
+        val batch = firestoreService.batch()
+        snap.documents.forEach { d ->
+            batch.set(d.reference, mapOf("seen" to true), SetOptions.merge())
+        }
+        batch.commit().await()
+    }
+
+    private suspend fun createNotification(targetUserId: String, payload: Map<String, Any>) {
+        val doc = firestoreService.collection("users")
+            .document(targetUserId)
+            .collection("notifications")
+            .document()
+        val base = payload.toMutableMap()
+        base["id"] = doc.id
+        doc.set(base).await()
+    }
+
+    // ---------------- PELÍCULAS ----------------
     override suspend fun getAllMovies(): List<Map<String, Any>> {
-        try {
-            Log.d("FirestoreDataSource", "🔥 Obteniendo películas desde Firestore...")
-            val snapshot = firestoreService.collection("movies")
-                .get()
-                .await()
-
-            Log.d("FirestoreDataSource", "🔥 Firestore devolvió ${snapshot.documents.size} documentos")
-            
-            val movies = snapshot.documents.mapNotNull { doc ->
+        return try {
+            val snap = firestoreService.collection("movies").get().await()
+            snap.documents.mapNotNull { doc ->
                 doc.data?.toMutableMap()?.apply {
-                    // Asegurar que el ID esté presente
                     if (this["id"] == null) this["id"] = doc.id.toIntOrNull() ?: 0
-                    Log.d("FirestoreDataSource", "🔥 Película: ${this["title"]} (ID: ${this["id"]})")
                 }
             }
-            
-            Log.d("FirestoreDataSource", "🔥 Procesadas ${movies.size} películas")
-            return movies
         } catch (e: Exception) {
-            Log.e("FirestoreDataSource", "🔥 Error obteniendo películas desde Firestore: ${e.message}", e)
-            return emptyList()
+            Log.e("Firestore", "Error getAllMovies: ${e.message}", e)
+            emptyList()
         }
     }
 
     override suspend fun getMovieById(movieId: Int): Map<String, Any>? {
-        val doc = firestoreService.collection("movies")
-            .document(movieId.toString())
-            .get()
-            .await()
-
-        return if (doc.exists()) {
-            doc.data?.toMutableMap()?.apply {
-                if (this["id"] == null) this["id"] = movieId
-            }
-        } else {
-            null
-        }
+        val doc = firestoreService.collection("movies").document(movieId.toString()).get().await()
+        return if (doc.exists()) doc.data?.toMutableMap()?.apply { if (this["id"] == null) this["id"] = movieId } else null
     }
 
     override suspend fun getMoviesByGenre(genre: String): List<Map<String, Any>> {
-        val allMovies = getAllMovies()
-        return if (genre == "Todos") {
-            allMovies
-        } else {
-            allMovies.filter { movie ->
-                val movieGenre = movie["genre"] as? String ?: ""
-                movieGenre.equals(genre, ignoreCase = true)
-            }
-        }
+        val all = getAllMovies()
+        return if (genre == "Todos") all
+        else all.filter { (it["genre"] as? String)?.equals(genre, ignoreCase = true) == true }
     }
 
     override suspend fun searchMovies(query: String): List<Map<String, Any>> {
         val q = query.trim()
         if (q.isEmpty()) return getAllMovies()
-        
-        val allMovies = getAllMovies()
-        return allMovies.filter { movie ->
-            val title = movie["title"] as? String ?: ""
-            val description = movie["description"] as? String ?: ""
-            val genre = movie["genre"] as? String ?: ""
-            
-            title.contains(q, ignoreCase = true) ||
-            description.contains(q, ignoreCase = true) ||
-            genre.contains(q, ignoreCase = true)
+        val all = getAllMovies()
+        return all.filter {
+            val t = it["title"] as? String ?: ""
+            val d = it["description"] as? String ?: ""
+            val g = it["genre"] as? String ?: ""
+            t.contains(q, true) || d.contains(q, true) || g.contains(q, true)
         }
     }
 
-    // Aux opcional si lo necesitas
-    suspend fun deleteUserDocument(userId: String) {
-        firestoreService.collection("users").document(userId).delete().await()
-    }
-    
-    // ---------------- Seguidores y Seguidos ----------------
-    
+    // ---------------- SEGUIDORES / SEGUIDOS ----------------
     override suspend fun followUser(targetUserId: String): Boolean {
-        val currentUid = currentUserId ?: throw IllegalStateException("Usuario no autenticado")
-        if (currentUid == targetUserId) return false // No se puede seguir a sí mismo
-        
-        try {
-            // 1. Añadir a la lista de "following" del usuario actual
-            firestoreService.collection("users")
-                .document(currentUid)
-                .collection("following")
-                .document(targetUserId)
-                .set(mapOf(
-                    "timestamp" to FieldValue.serverTimestamp()
-                ))
-                .await()
-                
-            // 2. Añadir a la lista de "followers" del usuario objetivo
-            firestoreService.collection("users")
-                .document(targetUserId)
-                .collection("followers")
-                .document(currentUid)
-                .set(mapOf(
-                    "timestamp" to FieldValue.serverTimestamp()
-                ))
-                .await()
-                
-            // 3. Actualizar contadores en ambos documentos
-            firestoreService.collection("users")
-                .document(currentUid)
-                .update("followingCount", FieldValue.increment(1))
-                .await()
-                
-            firestoreService.collection("users")
-                .document(targetUserId)
-                .update("followersCount", FieldValue.increment(1))
-                .await()
-                
-            return true
+        val uid = currentUserId ?: throw IllegalStateException("Usuario no autenticado")
+        if (uid == targetUserId) return false
+        return try {
+            // seguir
+            firestoreService.collection("users").document(uid)
+                .collection("following").document(targetUserId)
+                .set(mapOf("timestamp" to FieldValue.serverTimestamp())).await()
+            firestoreService.collection("users").document(targetUserId)
+                .collection("followers").document(uid)
+                .set(mapOf("timestamp" to FieldValue.serverTimestamp())).await()
+
+            // notificación al seguido
+            val actorName = getUserProfile()?.get("fullName") as? String ?: "Alguien"
+            createNotification(
+                targetUserId = targetUserId,
+                payload = mapOf(
+                    "type" to "follow",
+                    "actorUserId" to uid,
+                    "actorName" to actorName,
+                    "seen" to false,
+                    "createdAt" to System.currentTimeMillis()
+                )
+            )
+            true
         } catch (e: Exception) {
-            Log.e("FirestoreDataSource", "Error al seguir usuario: ${e.message}", e)
-            return false
+            Log.e("Firestore", "Error followUser: ${e.message}", e)
+            false
         }
     }
-    
+
     override suspend fun unfollowUser(targetUserId: String): Boolean {
-        val currentUid = currentUserId ?: throw IllegalStateException("Usuario no autenticado")
-        if (currentUid == targetUserId) return false // No tiene sentido
-        
-        try {
-            // 1. Eliminar de la lista de "following" del usuario actual
-            firestoreService.collection("users")
-                .document(currentUid)
-                .collection("following")
-                .document(targetUserId)
-                .delete()
-                .await()
-                
-            // 2. Eliminar de la lista de "followers" del usuario objetivo
-            firestoreService.collection("users")
-                .document(targetUserId)
-                .collection("followers")
-                .document(currentUid)
-                .delete()
-                .await()
-                
-            // 3. Actualizar contadores en ambos documentos
-            firestoreService.collection("users")
-                .document(currentUid)
-                .update("followingCount", FieldValue.increment(-1))
-                .await()
-                
-            firestoreService.collection("users")
-                .document(targetUserId)
-                .update("followersCount", FieldValue.increment(-1))
-                .await()
-                
-            return true
+        val uid = currentUserId ?: throw IllegalStateException("Usuario no autenticado")
+        if (uid == targetUserId) return false
+        return try {
+            firestoreService.collection("users").document(uid)
+                .collection("following").document(targetUserId).delete().await()
+            firestoreService.collection("users").document(targetUserId)
+                .collection("followers").document(uid).delete().await()
+            true
         } catch (e: Exception) {
-            Log.e("FirestoreDataSource", "Error al dejar de seguir usuario: ${e.message}", e)
-            return false
+            Log.e("Firestore", "Error unfollowUser: ${e.message}", e)
+            false
         }
     }
-    
+
     override suspend fun getFollowers(userId: String): List<Map<String, Any>> {
-        try {
-            val followersSnapshot = firestoreService.collection("users")
-                .document(userId)
-                .collection("followers")
-                .get()
-                .await()
-                
-            val followerIds = followersSnapshot.documents.map { it.id }
-            
-            // Obtener los perfiles completos de cada seguidor
-            return followerIds.mapNotNull { followerId ->
-                getUserProfileById(followerId)?.let { profile ->
-                    profile.toMutableMap().apply {
-                        this["uid"] = followerId
-                    }
-                }
+        return try {
+            val snap = firestoreService.collection("users").document(userId)
+                .collection("followers").get().await()
+            val ids = snap.documents.map { it.id }
+            ids.mapNotNull { id ->
+                getUserProfileById(id)?.toMutableMap()?.apply { this["uid"] = id }
             }
         } catch (e: Exception) {
-            Log.e("FirestoreDataSource", "Error al obtener seguidores: ${e.message}", e)
-            return emptyList()
+            Log.e("Firestore", "Error getFollowers: ${e.message}", e)
+            emptyList()
         }
     }
-    
+
     override suspend fun getFollowing(userId: String): List<Map<String, Any>> {
-        try {
-            val followingSnapshot = firestoreService.collection("users")
-                .document(userId)
-                .collection("following")
-                .get()
-                .await()
-                
-            val followingIds = followingSnapshot.documents.map { it.id }
-            
-            // Obtener los perfiles completos de cada usuario seguido
-            return followingIds.mapNotNull { followingId ->
-                getUserProfileById(followingId)?.let { profile ->
-                    profile.toMutableMap().apply {
-                        this["uid"] = followingId
-                    }
-                }
+        return try {
+            val snap = firestoreService.collection("users").document(userId)
+                .collection("following").get().await()
+            val ids = snap.documents.map { it.id }
+            ids.mapNotNull { id ->
+                getUserProfileById(id)?.toMutableMap()?.apply { this["uid"] = id }
             }
         } catch (e: Exception) {
-            Log.e("FirestoreDataSource", "Error al obtener usuarios seguidos: ${e.message}", e)
-            return emptyList()
+            Log.e("Firestore", "Error getFollowing: ${e.message}", e)
+            emptyList()
         }
     }
 }
