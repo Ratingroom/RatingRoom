@@ -337,13 +337,50 @@ fun FriendCard(
                 )
             }
 
-            // Botón seguir / mensaje / perfil
+            // Botón ver perfil siempre
             IconButton(onClick = { onUserClick(friend.uid ?: friend.id.toString()) }) {
                 Icon(
                     Icons.Default.Person,
                     contentDescription = "Ver perfil",
                     tint = cs.onSurfaceVariant
                 )
+            }
+
+            // Botones Seguir / Dejar de seguir según sección y relación mutua
+            val isMutual = friend.relationshipType == FriendshipType.MUTUAL
+            when (tabIndex) {
+                1 -> {
+                    // Sección "Siguiendo": mostrar "Dejar de seguir"
+                    IconButton(onClick = { onAction("unfollow") }) {
+                        Icon(
+                            imageVector = Icons.Default.PersonRemove,
+                            contentDescription = "Dejar de seguir",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+                2 -> {
+                    // Sección "Seguidores": mostrar "Seguir" solo si NO es mutuo
+                    if (!isMutual) {
+                        IconButton(onClick = { onAction("follow_back") }) {
+                            Icon(
+                                imageVector = Icons.Default.PersonAdd,
+                                contentDescription = "Seguir",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+                3 -> {
+                    // Sección "Descubrir": mostrar "Seguir"
+                    IconButton(onClick = { onAction("follow") }) {
+                        Icon(
+                            imageVector = Icons.Default.PersonAdd,
+                            contentDescription = "Seguir",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
         }
     }
