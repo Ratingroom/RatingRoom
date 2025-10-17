@@ -224,9 +224,9 @@ fun ProfileMetrics(
                 modifier = Modifier.weight(1f)
             )
         }
-        
+
         Spacer(modifier = Modifier.height(12.dp))
-        
+
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             MetricCard(
                 icon = Icons.Filled.People,
@@ -277,11 +277,11 @@ fun ProfileSettings(
 
         HorizontalDivider()
 
+        // 🔻 Se eliminó la opción "Notificaciones"
         SettingsList(
             items = listOf(
                 SettingsItem("edit", "Editar perfil", Icons.Filled.Person),
                 SettingsItem("privacy", "Configuración de privacidad", Icons.Filled.Lock),
-                SettingsItem("notif", "Notificaciones", Icons.Filled.Notifications),
                 SettingsItem("logout", "Cerrar sesión", Icons.Filled.Logout, tint = colorScheme.error)
             ),
             onItemClick = { id ->

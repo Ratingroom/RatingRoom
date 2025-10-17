@@ -17,6 +17,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
     object EditProfile : Screen("edit_profile", "Editar Perfil")
     object Friends : Screen("friends", "Amigos", Icons.Default.People)
     object Favorites : Screen("favorites", "Favoritos", Icons.Default.Favorite)
+    object Notifications : Screen("notifications", "Notificaciones", Icons.Default.Notifications)
     object Settings : Screen("settings", "Configuración", Icons.Default.Settings)
     object List : Screen("list", "Lista de Películas", Icons.Default.List)
     object Reviews : Screen("reviews", "Mis Reseñas", Icons.Default.RateReview)
@@ -37,7 +38,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
         const val ARG = "userId"
         fun createRoute(userId: String) = "friend/$userId"
     }
-    
+
     // ---------- SEGUIDORES Y SEGUIDOS ----------
     object Followers : Screen("followers", "Seguidores")
     object Following : Screen("following", "Siguiendo")
@@ -51,6 +52,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
             Profile,
             Friends,
             Favorites,
+            Notifications,
             Settings
         )
 

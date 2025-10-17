@@ -187,56 +187,52 @@ class FirestoreDataSourceImpl @Inject constructor(
     }
 
     override fun observeReviewsByMovie(movieId: Int): Flow<List<Map<String, Any>>> = callbackFlow {
-        val reviewsRef = firestoreService.collection("movies")
+        val ref = firestoreService.collection("movies")
             .document(movieId.toString())
             .collection("reviews")
 
-        val subscription = reviewsRef.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                Log.e("Firestore", "Error observando reseñas: ${error.message}", error)
+        val listener = ref.addSnapshotListener { snap, err ->
+            if (err != null) {
+                Log.e("Firestore", "Error observando reseñas: ${err.message}")
                 return@addSnapshotListener
             }
-
-            if (snapshot != null) {
-                val reviews = snapshot.documents.mapNotNull { doc ->
+            if (snap != null) {
+                val list = snap.documents.mapNotNull { doc ->
                     doc.data?.toMutableMap()?.apply {
                         if (this["id"] == null) this["id"] = doc.id
                         if (this["likes"] == null) this["likes"] = 0
                     }
                 }
-                trySend(reviews)
+                trySend(list)
             }
         }
-
-        awaitClose { subscription.remove() }
+        awaitClose { listener.remove() }
     }
 
     override fun observeReviewsByUser(userId: String): Flow<List<Map<String, Any>>> = callbackFlow {
-        val reviewsRef = firestoreService.collection("users")
+        val ref = firestoreService.collection("users")
             .document(userId)
             .collection("reviews")
 
-        val subscription = reviewsRef.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                Log.e("Firestore", "Error observando reseñas de usuario: ${error.message}", error)
+        val listener = ref.addSnapshotListener { snap, err ->
+            if (err != null) {
+                Log.e("Firestore", "Error observando reseñas de usuario: ${err.message}")
                 return@addSnapshotListener
             }
-
-            if (snapshot != null) {
-                val reviews = snapshot.documents.mapNotNull { doc ->
+            if (snap != null) {
+                val list = snap.documents.mapNotNull { doc ->
                     doc.data?.toMutableMap()?.apply {
                         if (this["id"] == null) this["id"] = doc.id
                         if (this["likes"] == null) this["likes"] = 0
                     }
                 }
-                trySend(reviews)
+                trySend(list)
             }
         }
-
-        awaitClose { subscription.remove() }
+        awaitClose { listener.remove() }
     }
 
-    // ✅ Fix contador de likes inicial
+    // ✅ Like toggle + notificación al autor
     override suspend fun sendOrDeleteLike(reviewId: String, userId: String): Boolean {
         val rootRef = firestoreService.collection("reviews").document(reviewId)
         val rootSnap = rootRef.get().await()
@@ -257,14 +253,14 @@ class FirestoreDataSourceImpl @Inject constructor(
         val mirrorLikeRef = firestoreService.collection("users")
             .document(userId).collection("likes").document(reviewId)
 
-        return firestoreService.runTransaction { tx ->
+        val adding = firestoreService.runTransaction { tx ->
             val likeDoc = tx.get(likeDocRef)
-            val adding = !likeDoc.exists()
+            val addingLocal = !likeDoc.exists()
             val rootData = tx.get(rootRef).data ?: emptyMap()
             val currentLikes = (rootData["likes"] as? Number)?.toInt() ?: 0
-            val newCount = if (adding) currentLikes + 1 else maxOf(currentLikes - 1, 0)
+            val newCount = if (addingLocal) currentLikes + 1 else maxOf(currentLikes - 1, 0)
 
-            if (adding) {
+            if (addingLocal) {
                 tx.set(likeDocRef, mapOf("timestamp" to FieldValue.serverTimestamp()))
                 tx.set(mirrorLikeRef, mapOf("timestamp" to FieldValue.serverTimestamp()))
             } else {
@@ -277,8 +273,79 @@ class FirestoreDataSourceImpl @Inject constructor(
             tx.set(movieReviewRef, update, SetOptions.merge())
             tx.set(userReviewRef, update, SetOptions.merge())
 
-            adding
+            addingLocal
         }.await()
+
+        // Crear notificación SOLO cuando se añade el like y no es auto-like
+        if (adding && authorUid != userId) {
+            createNotification(
+                targetUserId = authorUid,
+                payload = mapOf(
+                    "type" to "like",
+                    "actorUserId" to (currentUserId ?: userId),
+                    "actorName" to (getUserProfile()?.get("fullName") as? String ?: "Alguien"),
+                    "reviewId" to reviewId,
+                    "movieId" to movieId,
+                    "seen" to false,
+                    "createdAt" to System.currentTimeMillis()
+                )
+            )
+        }
+
+        return adding
+    }
+
+    // ---------------- NOTIFICACIONES ----------------
+    override fun observeNotifications(userId: String): Flow<List<Map<String, Any>>> = callbackFlow {
+        val ref = firestoreService.collection("users")
+            .document(userId)
+            .collection("notifications")
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+
+        val listener = ref.addSnapshotListener { snap, err ->
+            if (err != null) {
+                Log.e("Firestore", "Error observando notificaciones: ${err.message}")
+                return@addSnapshotListener
+            }
+            if (snap != null) {
+                val list = snap.documents.mapNotNull { d ->
+                    d.data?.toMutableMap()?.apply { if (this["id"] == null) this["id"] = d.id }
+                }
+                trySend(list)
+            }
+        }
+        awaitClose { listener.remove() }
+    }
+
+    override suspend fun markNotificationSeen(userId: String, notificationId: String) {
+        firestoreService.collection("users")
+            .document(userId)
+            .collection("notifications")
+            .document(notificationId)
+            .set(mapOf("seen" to true), SetOptions.merge())
+            .await()
+    }
+
+    override suspend fun markAllNotificationsSeen(userId: String) {
+        val ref = firestoreService.collection("users")
+            .document(userId)
+            .collection("notifications")
+        val snap = ref.get().await()
+        val batch = firestoreService.batch()
+        snap.documents.forEach { d ->
+            batch.set(d.reference, mapOf("seen" to true), SetOptions.merge())
+        }
+        batch.commit().await()
+    }
+
+    private suspend fun createNotification(targetUserId: String, payload: Map<String, Any>) {
+        val doc = firestoreService.collection("users")
+            .document(targetUserId)
+            .collection("notifications")
+            .document()
+        val base = payload.toMutableMap()
+        base["id"] = doc.id
+        doc.set(base).await()
     }
 
     // ---------------- PELÍCULAS ----------------
@@ -298,17 +365,13 @@ class FirestoreDataSourceImpl @Inject constructor(
 
     override suspend fun getMovieById(movieId: Int): Map<String, Any>? {
         val doc = firestoreService.collection("movies").document(movieId.toString()).get().await()
-        return if (doc.exists()) {
-            doc.data?.toMutableMap()?.apply { if (this["id"] == null) this["id"] = movieId }
-        } else null
+        return if (doc.exists()) doc.data?.toMutableMap()?.apply { if (this["id"] == null) this["id"] = movieId } else null
     }
 
     override suspend fun getMoviesByGenre(genre: String): List<Map<String, Any>> {
         val all = getAllMovies()
         return if (genre == "Todos") all
-        else all.filter {
-            (it["genre"] as? String)?.equals(genre, ignoreCase = true) == true
-        }
+        else all.filter { (it["genre"] as? String)?.equals(genre, ignoreCase = true) == true }
     }
 
     override suspend fun searchMovies(query: String): List<Map<String, Any>> {
@@ -328,12 +391,26 @@ class FirestoreDataSourceImpl @Inject constructor(
         val uid = currentUserId ?: throw IllegalStateException("Usuario no autenticado")
         if (uid == targetUserId) return false
         return try {
+            // seguir
             firestoreService.collection("users").document(uid)
                 .collection("following").document(targetUserId)
                 .set(mapOf("timestamp" to FieldValue.serverTimestamp())).await()
             firestoreService.collection("users").document(targetUserId)
                 .collection("followers").document(uid)
                 .set(mapOf("timestamp" to FieldValue.serverTimestamp())).await()
+
+            // notificación al seguido
+            val actorName = getUserProfile()?.get("fullName") as? String ?: "Alguien"
+            createNotification(
+                targetUserId = targetUserId,
+                payload = mapOf(
+                    "type" to "follow",
+                    "actorUserId" to uid,
+                    "actorName" to actorName,
+                    "seen" to false,
+                    "createdAt" to System.currentTimeMillis()
+                )
+            )
             true
         } catch (e: Exception) {
             Log.e("Firestore", "Error followUser: ${e.message}", e)

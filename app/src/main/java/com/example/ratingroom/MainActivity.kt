@@ -48,6 +48,8 @@ import com.example.ratingroom.ui.utils.GradientBackground
 import com.example.ratingroom.ui.utils.ModernNavigationDrawer
 import com.example.ratingroom.ui.utils.ModernTopBar
 import dagger.hilt.android.AndroidEntryPoint
+// ⬅️ IMPORT NUEVO
+import com.example.ratingroom.ui.screens.notifications.NotificationsRoute
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -241,6 +243,11 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
 
                     composable(Screen.Settings.route) { SettingsScreen(onBack = navigateBack) }
 
+                    // ---------- NOTIFICACIONES (NUEVO) ----------
+                    composable(Screen.Notifications.route) {
+                        NotificationsRoute(onBack = navigateBack)
+                    }
+
                     // ---------- DETALLE ----------
                     composable(
                         route = Screen.MovieDetail.route,
@@ -265,7 +272,7 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                         val uid = backStackEntry.arguments?.getString("userId") ?: return@composable
                         FriendRoute(userId = uid, onBack = navigateBack)
                     }
-                    
+
                     // ---------- SEGUIDORES Y SEGUIDOS ----------
                     composable(Screen.Followers.route) {
                         FollowersRoute(
@@ -273,7 +280,7 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                             onUserClick = { userId -> navigateToScreen(Screen.Friend.createRoute(userId)) }
                         )
                     }
-                    
+
                     composable(Screen.Following.route) {
                         FollowingRoute(
                             onBack = navigateBack,
