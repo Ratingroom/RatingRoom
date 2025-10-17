@@ -13,7 +13,9 @@ import com.example.ratingroom.data.models.Friend
 import com.example.ratingroom.data.models.FriendshipType
 
 @HiltViewModel
-class FriendsViewModel @Inject constructor() : ViewModel() {
+class FriendsViewModel @Inject constructor(
+    private val friendsRepository: FriendsRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FriendsUIState())
     val uiState: StateFlow<FriendsUIState> = _uiState.asStateFlow()
@@ -27,23 +29,25 @@ class FriendsViewModel @Inject constructor() : ViewModel() {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
             try {
-                val followingRaw = FriendsRepository.getFriends()
-                val suggestionsRaw = FriendsRepository.getSuggestions()
-                val followersRaw = FriendsRepository.getFollowers()
+                // Obtener listas desde Firestore mediante el repositorio
+                val followingRaw = friendsRepository.getFollowing()
+                val followersRaw = friendsRepository.getFollowers()
+                val suggestionsRaw = friendsRepository.getSuggestions()
 
-                val followingIds = followingRaw.map { it.id }.toSet()
-                val followersIds = followersRaw.map { it.id }.toSet()
+                val followingUids = followingRaw.mapNotNull { it.uid }.toSet()
+                val followersUids = followersRaw.mapNotNull { it.uid }.toSet()
 
                 // Enriquecer con relationshipType según pertenencia en las listas
                 val following = followingRaw.map { f ->
+                    val isMutual = followersUids.contains(f.uid)
                     f.copy(
-                        relationshipType = if (followersIds.contains(f.id)) FriendshipType.MUTUAL else FriendshipType.FOLLOWING,
+                        relationshipType = if (isMutual) FriendshipType.MUTUAL else FriendshipType.FOLLOWING,
                         isFollowing = true
                     )
                 }
 
                 val followers = followersRaw.map { f ->
-                    val isMutual = followingIds.contains(f.id)
+                    val isMutual = followingUids.contains(f.uid)
                     f.copy(
                         relationshipType = if (isMutual) FriendshipType.MUTUAL else FriendshipType.FOLLOWER,
                         isFollowing = isMutual
@@ -51,7 +55,7 @@ class FriendsViewModel @Inject constructor() : ViewModel() {
                 }
 
                 val suggestions = suggestionsRaw
-                    .filter { it.id !in followingIds && it.id !in followersIds }
+                    .filter { it.uid !in followingUids && it.uid !in followersUids }
                     .map { s ->
                         s.copy(
                             relationshipType = FriendshipType.NONE,
@@ -84,17 +88,22 @@ class FriendsViewModel @Inject constructor() : ViewModel() {
         _uiState.value = _uiState.value.copy(selectedTab = tab)
     }
 
-    fun onFriendAction(friendId: Int, action: String) {
+    fun onFriendAction(friend: Friend, action: String) {
         viewModelScope.launch {
             try {
+                val targetUid = friend.uid
+                if (targetUid.isNullOrBlank()) {
+                    _uiState.value = _uiState.value.copy(errorMessage = "UID de usuario no disponible")
+                    return@launch
+                }
                 when (action) {
                     // Compatibilidad con versiones anteriores del UI
-                    "add_friend" -> FriendsRepository.followUser(friendId)
-                    "remove_friend" -> FriendsRepository.unfollowUser(friendId)
+                    "add_friend" -> friendsRepository.followUser(targetUid)
+                    "remove_friend" -> friendsRepository.unfollowUser(targetUid)
                     // Acciones principales
-                    "follow" -> FriendsRepository.followUser(friendId)
-                    "unfollow" -> FriendsRepository.unfollowUser(friendId)
-                    "follow_back" -> FriendsRepository.followUser(friendId)
+                    "follow" -> friendsRepository.followUser(targetUid)
+                    "unfollow" -> friendsRepository.unfollowUser(targetUid)
+                    "follow_back" -> friendsRepository.followUser(targetUid)
                 }
                 loadFriendsData() // Recargar datos
             } catch (e: Exception) {

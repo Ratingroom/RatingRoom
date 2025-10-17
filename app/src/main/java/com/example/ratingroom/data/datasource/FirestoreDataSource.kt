@@ -24,6 +24,23 @@ interface FirestoreDataSource {
     )
 
     suspend fun getUserProfile(): Map<String, Any>?
+    suspend fun getUserProfileById(userId: String): Map<String, Any>?
+
+    // ------- Amigos (Seguidores/Seguidos) --------
+    /** Lista de usuarios que sigue el usuario actual */
+    suspend fun getFollowing(userId: String): List<Map<String, Any>>
+
+    /** Lista de usuarios que siguen al usuario actual */
+    suspend fun getFollowers(userId: String): List<Map<String, Any>>
+
+    /** Lista de todos los usuarios (para generar sugerencias) */
+    suspend fun getAllUsers(): List<Map<String, Any>>
+
+    /** Seguir a un usuario (crea documentos en following y followers) */
+    suspend fun followUser(targetUserId: String)
+
+    /** Dejar de seguir a un usuario (elimina documentos en following y followers) */
+    suspend fun unfollowUser(targetUserId: String)
 
     // ------- Películas --------
     /** Obtiene todas las películas desde Firebase */
@@ -54,14 +71,9 @@ interface FirestoreDataSource {
         text: String
     ): String
 
-    /** Lee reseñas por película (de /movies/{movieId}/reviews) */
     suspend fun getReviewsByMovie(movieId: Int): List<Map<String, Any>>
-
-    /** Obtiene el perfil de un usuario específico por su UID */
-    suspend fun getUserProfileById(userId: String): Map<String, Any>?
-
-    /** Lee reseñas del usuario (de /users/{userId}/reviews) */
     suspend fun getReviewsByUser(userId: String): List<Map<String, Any>>
 
+    /** Envía o elimina like en una reseña. Devuelve true si quedó con like, false si se eliminó */
     suspend fun sendOrDeleteLike(reviewId: String, userId: String): Boolean
 }

@@ -43,7 +43,7 @@ fun FriendsScreen(
         uiState = uiState,
         onSearchQueryChange = viewModel::onSearchQueryChange,
         onTabSelected = viewModel::onTabSelected,
-        onFriendAction = { friend, action -> viewModel.onFriendAction(friend.id, action) },
+        onFriendAction = { friend, action -> viewModel.onFriendAction(friend, action) },
         onUserClick = onUserClick,                 // 👈 propagamos
         modifier = modifier
     )
@@ -80,7 +80,9 @@ fun FriendsScreenContent(
             val followingCount = uiState.friends.size
             val followersCount = uiState.followers.size
             val mutualCount = uiState.friends.count { f ->
-                uiState.followers.any { it.id == f.id }
+                val fu = f.uid
+                if (!fu.isNullOrBlank()) uiState.followers.any { it.uid == fu }
+                else uiState.followers.any { it.id == f.id }
             }
 
             Row(
@@ -250,7 +252,7 @@ fun ActivityTab(
                 // 👇 sin tocar el composable interno: hacemos clickable toda la tarjeta
                 Box(
                     modifier = Modifier.clickable {
-                        onUserClick(activity.friend.id.toString())
+                        onUserClick(activity.friend.uid ?: activity.friend.id.toString())
                     }
                 ) {
                     FriendActivityCard(
@@ -475,7 +477,7 @@ fun FriendCard(
                 }
 
                 // Navega al perfil del amigo
-                IconButton(onClick = { onUserClick(friend.id.toString()) }) {
+                IconButton(onClick = { onUserClick(friend.uid ?: friend.id.toString()) }) {
                     Icon(
                         Icons.Default.Person,
                         contentDescription = "Ver perfil",

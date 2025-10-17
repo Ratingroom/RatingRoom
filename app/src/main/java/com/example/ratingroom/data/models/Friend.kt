@@ -2,6 +2,7 @@ package com.example.ratingroom.data.models
 
 data class Friend(
     val id: Int,
+    val uid: String? = null, // UID de Firebase del usuario
     val name: String,
     val username: String,
     val profileImageUrl: String? = null,
@@ -14,7 +15,7 @@ data class Friend(
     val favoriteGenres: List<String> = emptyList(),
     val totalReviews: Int = 0,
     val averageRating: Double = 0.0
-    
+
 )
 
 enum class FriendshipType {
