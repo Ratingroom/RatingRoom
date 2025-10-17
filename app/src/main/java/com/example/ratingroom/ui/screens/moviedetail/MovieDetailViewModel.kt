@@ -40,8 +40,6 @@ class MovieDetailViewModel @Inject constructor(
     val showFollowingOnly: StateFlow<Boolean> = _showFollowingOnly.asStateFlow()
 
     private val _followingNames = MutableStateFlow<Set<String>>(emptySet())
-
-    // ✅ Set de reviews que el usuario actual ya ha dado like
     private val _likedIds = MutableStateFlow<Set<String>>(emptySet())
 
     fun setShowFollowingOnly(enabled: Boolean) {
@@ -53,8 +51,7 @@ class MovieDetailViewModel @Inject constructor(
     fun loadMovieDetail(movieId: Int) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-
-            observeMyLikes() // escucha likes personales
+            observeMyLikes()
 
             runCatching {
                 val movie = movieRepository.getMovieById(movieId)
@@ -86,15 +83,13 @@ class MovieDetailViewModel @Inject constructor(
                 _likedIds
             ) { reviewsDto, followingOnly, followingNames, likedIds ->
                 val all = mapReviewsFromDto(reviewsDto, likedIds)
-                val filtered = if (!followingOnly) all else filterByFollowingNames(all, followingNames)
-                filtered
+                if (!followingOnly) all else filterByFollowingNames(all, followingNames)
             }.collectLatest { list ->
                 _uiState.update { it.copy(reviews = list) }
             }
         }
     }
 
-    // 🔔 Observa la colección /users/{uid}/likes/ para mantener corazones sincronizados
     private fun observeMyLikes() {
         val uid = getCurrentUserId()
         if (uid.isBlank() || uid == "anonymous") {
@@ -112,14 +107,12 @@ class MovieDetailViewModel @Inject constructor(
                 if (snap != null) {
                     _likedIds.value = snap.documents.map { it.id }.toSet()
                     _uiState.update { st ->
-                        val remapped = st.reviews.map { r -> r.copy(isLiked = r.id in _likedIds.value) }
-                        st.copy(reviews = remapped)
+                        st.copy(reviews = st.reviews.map { r -> r.copy(isLiked = r.id in _likedIds.value) })
                     }
                 }
             }
     }
 
-    // --- Filtros en memoria ---
     private fun applyFilterIfNeeded(all: List<Review>): List<Review> {
         return if (!_showFollowingOnly.value) all
         else filterByFollowingNames(all, _followingNames.value)
@@ -182,7 +175,6 @@ class MovieDetailViewModel @Inject constructor(
         }
     }
 
-    // ✅ Corregido: los likes nunca deben iniciar con 0 incorrecto o nulos
     private fun mapReviewsFromDto(
         reviewsDto: List<com.example.ratingroom.data.dtos.ReviewDto>,
         likedIds: Set<String>
@@ -197,7 +189,7 @@ class MovieDetailViewModel @Inject constructor(
                 date = SimpleDateFormat("dd/MM/yyyy", Locale("es")).format(Date()),
                 userName = dto.userName,
                 userImageUrl = dto.userImageUrl,
-                likes = (dto.likes.takeIf { it >= 0 } ?: 0), // 🔧 asegura que nunca arranque negativo ni nulo
+                likes = (dto.likes.takeIf { it >= 0 } ?: 0),
                 isLiked = dto.id in likedIds
             )
         }
@@ -211,18 +203,16 @@ class MovieDetailViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 reviewRepository.create(HARDCODED_USER_ID, movieId, rating, texto)
-            }.onSuccess {
-                loadMovieDetail(movieId)
-            }.onFailure { e ->
-                _uiState.value = _uiState.value.copy(errorMessage = e.message)
-            }
+            }.onSuccess { loadMovieDetail(movieId) }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(errorMessage = e.message)
+                }
         }
     }
 
-    fun getCurrentUserId(): String {
-        return authRepository.currentUser?.uid ?: "anonymous"
-    }
+    fun getCurrentUserId(): String = authRepository.currentUser?.uid ?: "anonymous"
 
+    // ⬇️ FIX: no tocamos el contador; solo reflejamos isLiked.
     fun sendOrDeleteLike(reviewId: String, userId: String) {
         viewModelScope.launch {
             try {
@@ -230,16 +220,13 @@ class MovieDetailViewModel @Inject constructor(
                 if (result.isSuccess) {
                     val wasLiked = result.getOrNull() ?: false
                     _uiState.update { current ->
-                        val updated = current.reviews.map { r ->
-                            if (r.id == reviewId) {
-                                r.copy(
-                                    likes = if (wasLiked) r.likes + 1 else (r.likes - 1).coerceAtLeast(0),
-                                    isLiked = wasLiked
-                                )
-                            } else r
-                        }
-                        current.copy(reviews = updated)
+                        current.copy(
+                            reviews = current.reviews.map { r ->
+                                if (r.id == reviewId) r.copy(isLiked = wasLiked) else r
+                            }
+                        )
                     }
+                    // El contador "likes" lo actualizará el listener en tiempo real.
                 } else {
                     _uiState.value = _uiState.value.copy(
                         errorMessage = result.exceptionOrNull()?.message
