@@ -12,6 +12,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -43,21 +44,7 @@ class MovieDetailViewModel @Inject constructor(
                 val reviewsDto = reviewRepository.getReviewsByMovie(movieId)
 
                 // ✅ Mapper DTO -> data.models.Review (tu modelo usa Double en rating)
-                val reviews: List<Review> = reviewsDto.map { dto ->
-                    Review(
-                        id = dto.id,
-                        movieId = dto.pelicula_id,
-                        userId = dto.usuario_id,
-                        rating = dto.rating.toDouble(),
-                        comment = dto.texto,
-                        date = SimpleDateFormat("dd/MM/yyyy", Locale("es")).format(Date()),
-                        // 🎯 Información del usuario autor del review
-                        userName = dto.userName,
-                        userImageUrl = dto.userImageUrl,
-                        likes = dto.likes,
-                        isLiked = false
-                    )
-                }
+                val reviews: List<Review> = mapReviewsFromDto(reviewsDto)
 
                 movie to reviews
             }.onSuccess { (movie: com.example.ratingroom.data.models.Movie?, reviews: List<Review>) ->
@@ -66,12 +53,44 @@ class MovieDetailViewModel @Inject constructor(
                     movie = movie,
                     reviews = reviews
                 )
+                
+                // Iniciar observación en tiempo real de las reseñas
+                observeReviewsRealTime(movieId)
             }.onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     errorMessage = e.message ?: "Error al cargar detalle"
                 )
             }
+        }
+    }
+    
+    private fun observeReviewsRealTime(movieId: Int) {
+        viewModelScope.launch {
+            reviewRepository.observeReviewsByMovie(movieId).collectLatest { reviewsDto ->
+                val reviews = mapReviewsFromDto(reviewsDto)
+                _uiState.update { currentState ->
+                    currentState.copy(reviews = reviews)
+                }
+            }
+        }
+    }
+    
+    private fun mapReviewsFromDto(reviewsDto: List<com.example.ratingroom.data.dtos.ReviewDto>): List<Review> {
+        return reviewsDto.map { dto ->
+            Review(
+                id = dto.id,
+                movieId = dto.pelicula_id,
+                userId = dto.usuario_id,
+                rating = dto.rating.toDouble(),
+                comment = dto.texto,
+                date = SimpleDateFormat("dd/MM/yyyy", Locale("es")).format(Date()),
+                // 🎯 Información del usuario autor del review
+                userName = dto.userName,
+                userImageUrl = dto.userImageUrl,
+                likes = dto.likes,
+                isLiked = false
+            )
         }
     }
 

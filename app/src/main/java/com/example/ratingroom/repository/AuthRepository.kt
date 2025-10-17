@@ -27,7 +27,9 @@ data class UserProfile(
     val profileImageUrl: String? = null,
     val mainMovieId: Int? = null, // 🎬 Película principal del usuario
     val createdAt: Long? = null,
-    val updatedAt: Long? = null
+    val updatedAt: Long? = null,
+    val followersCount: Int? = 0,
+    val followingCount: Int? = 0
 )
 
 @Singleton
@@ -173,6 +175,69 @@ class AuthRepository @Inject constructor(
                 createdAt = profileData["createdAt"] as? Long,
                 updatedAt = profileData["updatedAt"] as? Long
             )
+        }.mapErrorAuth()
+    }
+
+    // ---------- Seguidores y Seguidos ----------
+    suspend fun followUser(targetUserId: String): Result<Boolean> {
+        return runCatching {
+            firestoreDataSource.followUser(targetUserId)
+        }.mapErrorAuth()
+    }
+    
+    suspend fun unfollowUser(targetUserId: String): Result<Boolean> {
+        return runCatching {
+            firestoreDataSource.unfollowUser(targetUserId)
+        }.mapErrorAuth()
+    }
+    
+    suspend fun getFollowers(userId: String = ""): Result<List<UserProfile>> {
+        return runCatching {
+            val uid = userId.ifEmpty { currentUser?.uid ?: error("No hay usuario autenticado.") }
+            val followers = firestoreDataSource.getFollowers(uid)
+            
+            followers.map { profileData ->
+                val uid = profileData["uid"] as? String ?: ""
+                val email = profileData["email"] as? String ?: ""
+                val profileImageUrl = profileData["profileImageUrl"] as? String
+                
+                UserProfile(
+                    uid = uid,
+                    email = email,
+                    fullName = profileData["fullName"] as? String,
+                    favoriteGenre = profileData["favoriteGenre"] as? String,
+                    biography = profileData["biography"] as? String,
+                    location = profileData["location"] as? String,
+                    profileImageUrl = profileImageUrl,
+                    followersCount = (profileData["followersCount"] as? Number)?.toInt(),
+                    followingCount = (profileData["followingCount"] as? Number)?.toInt()
+                )
+            }
+        }.mapErrorAuth()
+    }
+    
+    suspend fun getFollowing(userId: String = ""): Result<List<UserProfile>> {
+        return runCatching {
+            val uid = userId.ifEmpty { currentUser?.uid ?: error("No hay usuario autenticado.") }
+            val following = firestoreDataSource.getFollowing(uid)
+            
+            following.map { profileData ->
+                val uid = profileData["uid"] as? String ?: ""
+                val email = profileData["email"] as? String ?: ""
+                val profileImageUrl = profileData["profileImageUrl"] as? String
+                
+                UserProfile(
+                    uid = uid,
+                    email = email,
+                    fullName = profileData["fullName"] as? String,
+                    favoriteGenre = profileData["favoriteGenre"] as? String,
+                    biography = profileData["biography"] as? String,
+                    location = profileData["location"] as? String,
+                    profileImageUrl = profileImageUrl,
+                    followersCount = (profileData["followersCount"] as? Number)?.toInt(),
+                    followingCount = (profileData["followingCount"] as? Number)?.toInt()
+                )
+            }
         }.mapErrorAuth()
     }
 

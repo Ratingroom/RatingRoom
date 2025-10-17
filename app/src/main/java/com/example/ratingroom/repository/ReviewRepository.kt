@@ -2,6 +2,8 @@ package com.example.ratingroom.repository
 
 import com.example.ratingroom.data.datasource.FirestoreDataSource
 import com.example.ratingroom.data.dtos.ReviewDto
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,7 +34,15 @@ class ReviewRepository @Inject constructor(
 
     suspend fun getReviewsByMovie(movieId: Int): List<ReviewDto> {
         val list: List<Map<String, Any>> = firestoreDataSource.getReviewsByMovie(movieId)
-
+        return mapReviewsFromFirestore(list, movieId)
+    }
+    
+    fun observeReviewsByMovie(movieId: Int): Flow<List<ReviewDto>> {
+        return firestoreDataSource.observeReviewsByMovie(movieId)
+            .map { list -> mapReviewsFromFirestore(list, movieId) }
+    }
+    
+    private fun mapReviewsFromFirestore(list: List<Map<String, Any>>, movieId: Int): List<ReviewDto> {
         return list.map { map ->
             val movieIdFromDb = (map["movieId"] as? Number)?.toInt() ?: movieId
             val ratingFromDb  = (map["rating"]  as? Number)?.toInt() ?: 0
@@ -93,29 +103,12 @@ class ReviewRepository @Inject constructor(
     // ➕ NUEVO: obtener reseñas de cualquier usuario por su UID de Firestore (para FriendScreen)
     suspend fun getReviewsByUserUid(userUid: String): List<ReviewDto> {
         val list: List<Map<String, Any>> = firestoreDataSource.getReviewsByUser(userUid)
-
-        return list.map { map ->
-            val movieIdFromDb = (map["movieId"] as? Number)?.toInt() ?: 0
-            val ratingFromDb  = (map["rating"]  as? Number)?.toInt() ?: 0
-            val textFromDb    = map["text"] as? String ?: ""
-            val idStr         = (map["id"] as? String)
-                ?: "${movieIdFromDb}_${textFromDb.hashCode()}_${ratingFromDb}"
-            // 🎯 Información desnormalizada del usuario
-            val userName = map["userName"] as? String
-            val userImageUrl = map["userImageUrl"] as? String
-            val likes = (map["likes"] as? Number)?.toInt() ?: 0
-
-            ReviewDto(
-                id = idStr,
-                usuario_id = 0, // no usamos el id entero en Firestore
-                pelicula_id = movieIdFromDb,
-                rating = ratingFromDb,
-                texto = textFromDb,
-                userName = userName,
-                userImageUrl = userImageUrl,
-                likes = likes
-            )
-        }
+        return mapReviewsFromFirestore(list, 0)
+    }
+    
+    fun observeReviewsByUserUid(userUid: String): Flow<List<ReviewDto>> {
+        return firestoreDataSource.observeReviewsByUser(userUid)
+            .map { list -> mapReviewsFromFirestore(list, 0) }
     }
 
     // Placeholders para compatibilidad si se usan desde la UI

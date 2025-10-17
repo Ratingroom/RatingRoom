@@ -13,6 +13,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -65,7 +66,9 @@ class ProfileViewModel @Inject constructor(
                     reviewsCount = count,
                     averageRating = avg,
                     profileImageUrl = userProfile.profileImageUrl,
-                    mainMovieId = userProfile.mainMovieId
+                    mainMovieId = userProfile.mainMovieId,
+                    followersCount = userProfile.followersCount ?: 0,
+                    followingCount = userProfile.followingCount ?: 0
                 )
 
                 _uiState.value = _uiState.value.copy(
@@ -73,10 +76,32 @@ class ProfileViewModel @Inject constructor(
                     profileData = profileData,
                     reviews = reviews
                 )
+                
+                // Iniciar observación en tiempo real de las reseñas del usuario
+                observeUserReviewsRealTime()
             }.onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     errorMessage = e.message ?: "No se pudo cargar el perfil"
+                )
+            }
+        }
+    }
+    
+    private fun observeUserReviewsRealTime() {
+        val userUid = authRepository.currentUser?.uid ?: return
+        
+        viewModelScope.launch {
+            reviewRepository.observeReviewsByUserUid(userUid).collectLatest { reviewsDto ->
+                val count = reviewsDto.size
+                val avg = if (count > 0) reviewsDto.map { it.rating }.average() else 0.0
+                
+                _uiState.value = _uiState.value.copy(
+                    reviews = reviewsDto,
+                    profileData = _uiState.value.profileData?.copy(
+                        reviewsCount = count,
+                        averageRating = avg
+                    )
                 )
             }
         }
@@ -165,5 +190,100 @@ class ProfileViewModel @Inject constructor(
     /** <-- esto es lo que MainActivity usa */
     fun logout() {
         authRepository.signOut()
+    }
+    
+    // Funciones para manejar seguidores y seguidos
+    private val _followers = MutableStateFlow<List<UserProfile>>(emptyList())
+    val followers: StateFlow<List<UserProfile>> = _followers.asStateFlow()
+    
+    private val _following = MutableStateFlow<List<UserProfile>>(emptyList())
+    val following: StateFlow<List<UserProfile>> = _following.asStateFlow()
+    
+    private val _isLoadingFollowers = MutableStateFlow(false)
+    val isLoadingFollowers: StateFlow<Boolean> = _isLoadingFollowers.asStateFlow()
+    
+    private val _isLoadingFollowing = MutableStateFlow(false)
+    val isLoadingFollowing: StateFlow<Boolean> = _isLoadingFollowing.asStateFlow()
+    
+    fun loadFollowers() {
+        viewModelScope.launch {
+            _isLoadingFollowers.value = true
+            authRepository.getFollowers()
+                .onSuccess { followersList ->
+                    _followers.value = followersList
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = e.message ?: "No se pudieron cargar los seguidores"
+                    )
+                }
+            _isLoadingFollowers.value = false
+        }
+    }
+    
+    fun loadFollowing() {
+        viewModelScope.launch {
+            _isLoadingFollowing.value = true
+            authRepository.getFollowing()
+                .onSuccess { followingList ->
+                    _following.value = followingList
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = e.message ?: "No se pudieron cargar los usuarios seguidos"
+                    )
+                }
+            _isLoadingFollowing.value = false
+        }
+    }
+    
+    fun followUser(userId: String) {
+        viewModelScope.launch {
+            authRepository.followUser(userId)
+                .onSuccess { success ->
+                    if (success) {
+                        // Actualizar contador de seguidos
+                        _uiState.value.profileData?.let { profileData ->
+                            _uiState.value = _uiState.value.copy(
+                                profileData = profileData.copy(
+                                    followingCount = profileData.followingCount + 1
+                                )
+                            )
+                        }
+                        // Recargar la lista de seguidos
+                        loadFollowing()
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = e.message ?: "No se pudo seguir al usuario"
+                    )
+                }
+        }
+    }
+    
+    fun unfollowUser(userId: String) {
+        viewModelScope.launch {
+            authRepository.unfollowUser(userId)
+                .onSuccess { success ->
+                    if (success) {
+                        // Actualizar contador de seguidos
+                        _uiState.value.profileData?.let { profileData ->
+                            _uiState.value = _uiState.value.copy(
+                                profileData = profileData.copy(
+                                    followingCount = (profileData.followingCount - 1).coerceAtLeast(0)
+                                )
+                            )
+                        }
+                        // Recargar la lista de seguidos
+                        loadFollowing()
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = e.message ?: "No se pudo dejar de seguir al usuario"
+                    )
+                }
+        }
     }
 }

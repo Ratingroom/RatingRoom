@@ -25,6 +25,8 @@ fun ProfileScreen(
     onBackClick: () -> Unit = {},
     onEditClick: () -> Unit = {},
     onLogoutClick: () -> Unit = {},
+    onNavigateToFollowers: () -> Unit = {},
+    onNavigateToFollowing: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
@@ -57,6 +59,8 @@ fun ProfileScreen(
         onEditReview = onEditReview,
         onDeleteReview = onDeleteReview,
         onRetry = { viewModel.refresh() },
+        onNavigateToFollowers = onNavigateToFollowers,
+        onNavigateToFollowing = onNavigateToFollowing,
         modifier = modifier
     )
 }
@@ -72,6 +76,8 @@ fun ProfileScreenContent(
     onEditReview: (Int, Int, String) -> Unit,
     onDeleteReview: (Int) -> Unit,
     onRetry: () -> Unit,
+    onNavigateToFollowers: () -> Unit,
+    onNavigateToFollowing: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
@@ -113,7 +119,11 @@ fun ProfileScreenContent(
                         ProfileMetrics(
                             reviewsCount = pd.reviewsCount,
                             averageRating = pd.averageRating,
-                            colorScheme = cs
+                            colorScheme = cs,
+                            followersCount = pd.followersCount,
+                            followingCount = pd.followingCount,
+                            onFollowersClick = { onNavigateToFollowers() },
+                            onFollowingClick = { onNavigateToFollowing() }
                         )
                     }
 
@@ -193,21 +203,46 @@ fun ProfileMetrics(
     reviewsCount: Int,
     averageRating: Double,
     colorScheme: ColorScheme,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    followersCount: Int = 0,
+    followingCount: Int = 0,
+    onFollowersClick: () -> Unit = {},
+    onFollowingClick: () -> Unit = {}
 ) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        MetricCard(
-            icon = Icons.Filled.ChatBubbleOutline,
-            number = reviewsCount.toString(),
-            label = "Reseñas",
-            modifier = Modifier.weight(1f)
-        )
-        MetricCard(
-            icon = Icons.Filled.Star,
-            number = String.format("%.1f", averageRating),
-            label = "Promedio",
-            modifier = Modifier.weight(1f)
-        )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MetricCard(
+                icon = Icons.Filled.ChatBubbleOutline,
+                number = reviewsCount.toString(),
+                label = "Reseñas",
+                modifier = Modifier.weight(1f)
+            )
+            MetricCard(
+                icon = Icons.Filled.Star,
+                number = String.format("%.1f", averageRating),
+                label = "Promedio",
+                modifier = Modifier.weight(1f)
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MetricCard(
+                icon = Icons.Filled.People,
+                number = followersCount.toString(),
+                label = "Seguidores",
+                modifier = Modifier.weight(1f),
+                onClick = onFollowersClick
+            )
+            MetricCard(
+                icon = Icons.Filled.PersonAdd,
+                number = followingCount.toString(),
+                label = "Siguiendo",
+                modifier = Modifier.weight(1f),
+                onClick = onFollowingClick
+            )
+        }
     }
 }
 
@@ -455,7 +490,9 @@ fun ProfileScreenPreview() {
             onCreateReview = { _, _ -> },
             onEditReview = { _, _, _ -> },
             onDeleteReview = {},
-            onRetry = {}
+            onRetry = {},
+            onNavigateToFollowers = {},
+            onNavigateToFollowing = {}
         )
     }
 }

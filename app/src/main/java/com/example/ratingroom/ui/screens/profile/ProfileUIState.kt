@@ -10,7 +10,9 @@ data class ProfileData(
     val reviewsCount: Int,
     val averageRating: Double,
     val profileImageUrl: String? = null,
-    val mainMovieId: Int? = null // 🎬 ID de la película principal
+    val mainMovieId: Int? = null, // 🎬 ID de la película principal
+    val followersCount: Int = 0,
+    val followingCount: Int = 0
 )
 
 data class ProfileUIState(

@@ -17,7 +17,8 @@ fun MetricCard(
     number: String,
     label: String,
     iconTint: Color = MaterialTheme.colorScheme.primary,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
 ) {
     val cs = MaterialTheme.colorScheme
     Card(
@@ -25,7 +26,8 @@ fun MetricCard(
         colors = CardDefaults.cardColors(
             containerColor = cs.surface,
             contentColor = cs.onSurface
-        )
+        ),
+        onClick = onClick
     ) {
         Column(
             modifier = Modifier
