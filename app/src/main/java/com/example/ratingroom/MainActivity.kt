@@ -67,6 +67,7 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
 
     var currentAuthState by remember { mutableStateOf(isUserLoggedIn) }
 
+    // 🔄 Carga inicial de perfil si no está en pantallas de autenticación
     LaunchedEffect(currentRoute) {
         if (
             currentRoute != Screen.Login.route &&
@@ -136,6 +137,8 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                         LoginScreen(
                             onLoginClick = { _, _ ->
                                 currentAuthState = true
+                                // 🔁 Recarga perfil al iniciar sesión
+                                profileViewModel.loadProfile()
                                 navController.navigate(Screen.MainMenu.route) {
                                     popUpTo(Screen.Login.route) { inclusive = true }
                                 }
@@ -144,16 +147,20 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                             onRegisterClick = { navigateToScreen(Screen.Register.route) }
                         )
                     }
+
                     composable(Screen.Register.route) {
                         RegisterScreen(
                             onRegisterClick = { _, _, _, _, _, _ ->
                                 currentAuthState = true
+                                // 🔁 Recarga perfil después de registrarse
+                                profileViewModel.loadProfile()
                                 navigateBack()
                             },
                             onLoginClick = { navigateBack() },
                             onBackClick = { navigateBack() }
                         )
                     }
+
                     composable(Screen.ForgotPassword.route) {
                         ForgotPasswordScreen(
                             onSendRecoveryClick = { _ -> navigateBack() },
@@ -176,14 +183,23 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                                 navController.navigate(Screen.Login.route) {
                                     popUpTo(0) { inclusive = true }
                                 }
+                                // 🔁 Limpia perfil al cerrar sesión
+                                profileViewModel.logout()
                             },
                             onNavigateToFollowers = { navigateToScreen(Screen.Followers.route) },
                             onNavigateToFollowing = { navigateToScreen(Screen.Following.route) }
                         )
                     }
 
+                    // ✅ Recarga perfil al guardar
                     composable(Screen.EditProfile.route) {
-                        EditProfileScreen(onSave = { navigateBack() }, onBackClick = { navigateBack() })
+                        EditProfileScreen(
+                            onSave = {
+                                navigateBack()
+                                profileViewModel.loadProfile() // 🔁 Fuerza actualización en sidebar
+                            },
+                            onBackClick = { navigateBack() }
+                        )
                     }
 
                     // ---------- FRIENDS ----------
