@@ -76,13 +76,20 @@ fun FriendsScreenContent(
                 )
                 .padding(16.dp)
         ) {
+            // Calcula contadores dinámicos
+            val followingCount = uiState.friends.size
+            val followersCount = uiState.followers.size
+            val mutualCount = uiState.friends.count { f ->
+                uiState.followers.any { it.id == f.id }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                StatItem(number = "3", label = "Siguiendo", modifier = Modifier.weight(1f))
-                StatItem(number = "4", label = "Seguidores", modifier = Modifier.weight(1f))
-                StatItem(number = "2", label = "Mutuos", modifier = Modifier.weight(1f))
+                StatItem(number = followingCount.toString(), label = "Siguiendo", modifier = Modifier.weight(1f))
+                StatItem(number = followersCount.toString(), label = "Seguidores", modifier = Modifier.weight(1f))
+                StatItem(number = mutualCount.toString(), label = "Mutuos", modifier = Modifier.weight(1f))
             }
         }
 
@@ -123,10 +130,16 @@ fun FriendsScreenContent(
                         )
                     }
                     else -> {
+                        val currentList = when (uiState.selectedTab) {
+                            1 -> uiState.friends           // Siguiendo
+                            2 -> uiState.followers         // Seguidores
+                            3 -> uiState.suggestions       // Descubrir
+                            else -> emptyList()
+                        }
                         FriendsListTab(
                             tabIndex = uiState.selectedTab,
                             searchQuery = uiState.searchQuery,
-                            friends = emptyList(),
+                            friends = currentList,
                             onFriendAction = onFriendAction,
                             onUserClick = onUserClick,      // 👈 propagamos
                             modifier = Modifier.fillMaxSize()
@@ -287,6 +300,7 @@ fun FriendsListTab(
             items(friendsList) { friend ->
                 FriendCard(
                     friend = friend,
+                    tabIndex = tabIndex,
                     onAction = { action -> onFriendAction(friend, action) },
                     onUserClick = onUserClick
                 )
@@ -318,6 +332,7 @@ fun PreviewFriendsScreen() {
 @Composable
 fun FriendCard(
     friend: Friend,
+    tabIndex: Int,
     onAction: (String) -> Unit,
     onUserClick: (String) -> Unit,               // 👈 ya estaba en nuestra versión previa
     modifier: Modifier = Modifier
@@ -408,41 +423,53 @@ fun FriendCard(
             }
 
             Column {
-                when (friend.relationshipType) {
-                    FriendshipType.FRIEND, FriendshipType.MUTUAL -> {
-                        IconButton(onClick = { onAction("message") }) {
-                            Icon(
-                                Icons.Default.Message,
-                                contentDescription = "Mensaje",
-                                tint = cs.onSurface
-                            )
-                        }
+                if (tabIndex == 1) {
+                    // En pestaña "Siguiendo" siempre permitir dejar de seguir
+                    IconButton(onClick = { onAction("unfollow") }) {
+                        Icon(
+                            Icons.Default.PersonRemove,
+                            contentDescription = "Dejar de seguir",
+                            tint = cs.error
+                        )
                     }
-                    FriendshipType.FOLLOWING -> {
-                        IconButton(onClick = { onAction("unfollow") }) {
-                            Icon(
-                                Icons.Default.PersonRemove,
-                                contentDescription = "Dejar de seguir",
-                                tint = cs.error
-                            )
+                } else {
+                    when (friend.relationshipType) {
+                        FriendshipType.MUTUAL -> {
+                            // En Seguidores o Descubrir no mostrar seguir si es mutuo
+                            IconButton(onClick = { onAction("message") }) {
+                                Icon(
+                                    Icons.Default.Message,
+                                    contentDescription = "Mensaje",
+                                    tint = cs.onSurface
+                                )
+                            }
                         }
-                    }
-                    FriendshipType.FOLLOWER -> {
-                        IconButton(onClick = { onAction("follow_back") }) {
-                            Icon(
-                                Icons.Default.PersonAdd,
-                                contentDescription = "Seguir",
-                                tint = cs.tertiary
-                            )
+                        FriendshipType.FOLLOWING -> {
+                            IconButton(onClick = { onAction("unfollow") }) {
+                                Icon(
+                                    Icons.Default.PersonRemove,
+                                    contentDescription = "Dejar de seguir",
+                                    tint = cs.error
+                                )
+                            }
                         }
-                    }
-                    FriendshipType.NONE -> {
-                        IconButton(onClick = { onAction("add_friend") }) {
-                            Icon(
-                                Icons.Default.PersonAdd,
-                                contentDescription = "Agregar amigo",
-                                tint = cs.onSurface
-                            )
+                        FriendshipType.FOLLOWER -> {
+                            IconButton(onClick = { onAction("follow") }) {
+                                Icon(
+                                    Icons.Default.PersonAdd,
+                                    contentDescription = "Seguir",
+                                    tint = cs.tertiary
+                                )
+                            }
+                        }
+                        FriendshipType.NONE, FriendshipType.FRIEND -> {
+                            IconButton(onClick = { onAction("follow") }) {
+                                Icon(
+                                    Icons.Default.PersonAdd,
+                                    contentDescription = "Seguir",
+                                    tint = cs.onSurface
+                                )
+                            }
                         }
                     }
                 }
@@ -470,6 +497,7 @@ fun EmptyFriendsState(
         0 -> "Sin actividad reciente" to Icons.Default.Group
         1 -> "Aún no sigues a nadie" to Icons.Default.PersonAdd
         2 -> "Aún no tienes seguidores" to Icons.Default.People
+        3 -> "Descubre nuevos amigos" to Icons.Default.Search
         else -> "" to Icons.Default.Group
     }
 
