@@ -37,6 +37,8 @@ import com.example.ratingroom.ui.screens.profile.EditProfileScreen
 import com.example.ratingroom.ui.screens.profile.ProfileScreen
 import com.example.ratingroom.ui.screens.profile.ProfileViewModel
 import com.example.ratingroom.ui.screens.friends.FriendRoute // ⬅️ NUEVO
+import com.example.ratingroom.ui.screens.profile.FollowersRoute
+import com.example.ratingroom.ui.screens.profile.FollowingRoute
 import com.example.ratingroom.ui.screens.register.RegisterScreen
 import com.example.ratingroom.ui.screens.reviews.ReviewsScreen
 import com.example.ratingroom.ui.screens.settings.SettingsScreen
@@ -195,7 +197,9 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                                 navController.navigate(Screen.Login.route) {
                                     popUpTo(0) { inclusive = true }
                                 }
-                            }
+                            },
+                            onNavigateToFollowers = { navigateToScreen(Screen.Followers.route) },
+                            onNavigateToFollowing = { navigateToScreen(Screen.Following.route) }
                         )
                     }
 
@@ -260,6 +264,21 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                     ) { backStackEntry ->
                         val uid = backStackEntry.arguments?.getString("userId") ?: return@composable
                         FriendRoute(userId = uid, onBack = navigateBack)
+                    }
+                    
+                    // ---------- SEGUIDORES Y SEGUIDOS ----------
+                    composable(Screen.Followers.route) {
+                        FollowersRoute(
+                            onBack = navigateBack,
+                            onUserClick = { userId -> navigateToScreen(Screen.Friend.createRoute(userId)) }
+                        )
+                    }
+                    
+                    composable(Screen.Following.route) {
+                        FollowingRoute(
+                            onBack = navigateBack,
+                            onUserClick = { userId -> navigateToScreen(Screen.Friend.createRoute(userId)) }
+                        )
                     }
                 }
             }

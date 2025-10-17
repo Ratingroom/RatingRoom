@@ -37,6 +37,10 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
         const val ARG = "userId"
         fun createRoute(userId: String) = "friend/$userId"
     }
+    
+    // ---------- SEGUIDORES Y SEGUIDOS ----------
+    object Followers : Screen("followers", "Seguidores")
+    object Following : Screen("following", "Siguiendo")
 
     companion object {
         // Lista de pantallas principales para el Drawer

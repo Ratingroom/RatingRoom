@@ -1,5 +1,7 @@
 package com.example.ratingroom.data.datasource
 
+import kotlinx.coroutines.flow.Flow
+
 interface FirestoreDataSource {
 
     // ------- Perfil --------
@@ -42,6 +44,16 @@ interface FirestoreDataSource {
     /** Dejar de seguir a un usuario (elimina documentos en following y followers) */
     suspend fun unfollowUser(targetUserId: String)
 
+    
+    // ------- Seguidores y Seguidos --------
+    suspend fun followUser(targetUserId: String): Boolean
+    
+    suspend fun unfollowUser(targetUserId: String): Boolean
+    
+    suspend fun getFollowers(userId: String): List<Map<String, Any>>
+    
+    suspend fun getFollowing(userId: String): List<Map<String, Any>>
+
     // ------- Películas --------
     /** Obtiene todas las películas desde Firebase */
     suspend fun getAllMovies(): List<Map<String, Any>>
@@ -73,6 +85,9 @@ interface FirestoreDataSource {
 
     suspend fun getReviewsByMovie(movieId: Int): List<Map<String, Any>>
     suspend fun getReviewsByUser(userId: String): List<Map<String, Any>>
+    
+    /** Observa reseñas del usuario en tiempo real */
+    fun observeReviewsByUser(userId: String): Flow<List<Map<String, Any>>>
 
     /** Envía o elimina like en una reseña. Devuelve true si quedó con like, false si se eliminó */
     suspend fun sendOrDeleteLike(reviewId: String, userId: String): Boolean

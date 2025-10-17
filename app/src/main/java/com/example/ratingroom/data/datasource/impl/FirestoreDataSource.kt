@@ -6,6 +6,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
@@ -164,6 +167,30 @@ class FirestoreDataSourceImpl @Inject constructor(
             }
         }
     }
+    
+    override fun observeReviewsByMovie(movieId: Int): Flow<List<Map<String, Any>>> = callbackFlow {
+        val reviewsRef = firestoreService.collection("movies")
+            .document(movieId.toString())
+            .collection("reviews")
+            
+        val subscription = reviewsRef.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.e("FirestoreDataSource", "Error observando reseñas: ${error.message}", error)
+                return@addSnapshotListener
+            }
+            
+            if (snapshot != null) {
+                val reviews = snapshot.documents.mapNotNull { doc ->
+                    doc.data?.toMutableMap()?.apply {
+                        if (this["id"] == null) this["id"] = doc.id
+                    }
+                }
+                trySend(reviews)
+            }
+        }
+        
+        awaitClose { subscription.remove() }
+    }
 
     override suspend fun getReviewsByUser(userId: String): List<Map<String, Any>> {
         val snapshot = firestoreService.collection("users")
@@ -177,6 +204,30 @@ class FirestoreDataSourceImpl @Inject constructor(
                 if (this["id"] == null) this["id"] = doc.id
             }
         }
+    }
+    
+    override fun observeReviewsByUser(userId: String): Flow<List<Map<String, Any>>> = callbackFlow {
+        val reviewsRef = firestoreService.collection("users")
+            .document(userId)
+            .collection("reviews")
+            
+        val subscription = reviewsRef.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.e("FirestoreDataSource", "Error observando reseñas de usuario: ${error.message}", error)
+                return@addSnapshotListener
+            }
+            
+            if (snapshot != null) {
+                val reviews = snapshot.documents.mapNotNull { doc ->
+                    doc.data?.toMutableMap()?.apply {
+                        if (this["id"] == null) this["id"] = doc.id
+                    }
+                }
+                trySend(reviews)
+            }
+        }
+        
+        awaitClose { subscription.remove() }
     }
 
     override suspend fun sendOrDeleteLike(reviewId: String, userId: String): Boolean {
@@ -271,5 +322,137 @@ class FirestoreDataSourceImpl @Inject constructor(
     // Aux opcional si lo necesitas
     suspend fun deleteUserDocument(userId: String) {
         firestoreService.collection("users").document(userId).delete().await()
+    }
+    
+    // ---------------- Seguidores y Seguidos ----------------
+    
+    override suspend fun followUser(targetUserId: String): Boolean {
+        val currentUid = currentUserId ?: throw IllegalStateException("Usuario no autenticado")
+        if (currentUid == targetUserId) return false // No se puede seguir a sí mismo
+        
+        try {
+            // 1. Añadir a la lista de "following" del usuario actual
+            firestoreService.collection("users")
+                .document(currentUid)
+                .collection("following")
+                .document(targetUserId)
+                .set(mapOf(
+                    "timestamp" to FieldValue.serverTimestamp()
+                ))
+                .await()
+                
+            // 2. Añadir a la lista de "followers" del usuario objetivo
+            firestoreService.collection("users")
+                .document(targetUserId)
+                .collection("followers")
+                .document(currentUid)
+                .set(mapOf(
+                    "timestamp" to FieldValue.serverTimestamp()
+                ))
+                .await()
+                
+            // 3. Actualizar contadores en ambos documentos
+            firestoreService.collection("users")
+                .document(currentUid)
+                .update("followingCount", FieldValue.increment(1))
+                .await()
+                
+            firestoreService.collection("users")
+                .document(targetUserId)
+                .update("followersCount", FieldValue.increment(1))
+                .await()
+                
+            return true
+        } catch (e: Exception) {
+            Log.e("FirestoreDataSource", "Error al seguir usuario: ${e.message}", e)
+            return false
+        }
+    }
+    
+    override suspend fun unfollowUser(targetUserId: String): Boolean {
+        val currentUid = currentUserId ?: throw IllegalStateException("Usuario no autenticado")
+        if (currentUid == targetUserId) return false // No tiene sentido
+        
+        try {
+            // 1. Eliminar de la lista de "following" del usuario actual
+            firestoreService.collection("users")
+                .document(currentUid)
+                .collection("following")
+                .document(targetUserId)
+                .delete()
+                .await()
+                
+            // 2. Eliminar de la lista de "followers" del usuario objetivo
+            firestoreService.collection("users")
+                .document(targetUserId)
+                .collection("followers")
+                .document(currentUid)
+                .delete()
+                .await()
+                
+            // 3. Actualizar contadores en ambos documentos
+            firestoreService.collection("users")
+                .document(currentUid)
+                .update("followingCount", FieldValue.increment(-1))
+                .await()
+                
+            firestoreService.collection("users")
+                .document(targetUserId)
+                .update("followersCount", FieldValue.increment(-1))
+                .await()
+                
+            return true
+        } catch (e: Exception) {
+            Log.e("FirestoreDataSource", "Error al dejar de seguir usuario: ${e.message}", e)
+            return false
+        }
+    }
+    
+    override suspend fun getFollowers(userId: String): List<Map<String, Any>> {
+        try {
+            val followersSnapshot = firestoreService.collection("users")
+                .document(userId)
+                .collection("followers")
+                .get()
+                .await()
+                
+            val followerIds = followersSnapshot.documents.map { it.id }
+            
+            // Obtener los perfiles completos de cada seguidor
+            return followerIds.mapNotNull { followerId ->
+                getUserProfileById(followerId)?.let { profile ->
+                    profile.toMutableMap().apply {
+                        this["uid"] = followerId
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FirestoreDataSource", "Error al obtener seguidores: ${e.message}", e)
+            return emptyList()
+        }
+    }
+    
+    override suspend fun getFollowing(userId: String): List<Map<String, Any>> {
+        try {
+            val followingSnapshot = firestoreService.collection("users")
+                .document(userId)
+                .collection("following")
+                .get()
+                .await()
+                
+            val followingIds = followingSnapshot.documents.map { it.id }
+            
+            // Obtener los perfiles completos de cada usuario seguido
+            return followingIds.mapNotNull { followingId ->
+                getUserProfileById(followingId)?.let { profile ->
+                    profile.toMutableMap().apply {
+                        this["uid"] = followingId
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FirestoreDataSource", "Error al obtener usuarios seguidos: ${e.message}", e)
+            return emptyList()
+        }
     }
 }
