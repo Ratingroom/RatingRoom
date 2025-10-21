@@ -31,17 +31,16 @@ class NotificationsViewModel @Inject constructor(
     private fun observe() {
         viewModelScope.launch {
             repo.observeMyNotifications().collectLatest { list ->
-                val mapped = list.map { m ->
+                val mapped = list.map { dto ->
                     Notification(
-                        id = (m["id"] as? String) ?: "",
-                        type = (m["type"] as? String) ?: "",
-                        actorUserId = (m["actorUserId"] as? String) ?: "",
-                        actorName = m["actorName"] as? String,
-                        reviewId = m["reviewId"] as? String,
-                        movieId = (m["movieId"] as? Number)?.toInt()
-                            ?: (m["movieId"] as? String)?.toIntOrNull(),
-                        createdAt = (m["createdAt"] as? Number)?.toLong() ?: 0L,
-                        seen = (m["seen"] as? Boolean) ?: false
+                        id = dto.id,
+                        type = dto.type,
+                        actorUserId = dto.actorUserId,
+                        actorName = dto.actorName,
+                        reviewId = dto.reviewId,
+                        movieId = dto.movieId,
+                        createdAt = dto.createdAt,
+                        seen = dto.seen
                     )
                 }
                 _ui.value = NotificationsUIState(isLoading = false, items = mapped)

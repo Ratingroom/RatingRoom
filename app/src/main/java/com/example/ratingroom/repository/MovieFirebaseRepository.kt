@@ -2,6 +2,7 @@ package com.example.ratingroom.repository
 
 import android.util.Log
 import com.example.ratingroom.data.datasource.FirestoreDataSource
+import com.example.ratingroom.data.dtos.MovieDto
 import com.example.ratingroom.data.models.Movie
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -14,35 +15,22 @@ class MovieFirebaseRepository @Inject constructor(
     private val TAG = "MovieFirebaseRepo"
 
     // ---------- Mappers Firebase -> Modelo ----------
-    private fun mapMovieFromFirestore(data: Map<String, Any>): Movie {
-        val id = (data["id"] as? Number)?.toInt() ?: 0
-        val title = data["title"] as? String ?: ""
-        val description = data["description"] as? String ?: ""
-        val year = data["year"] as? String ?: ""
-        val genre = data["genre"] as? String ?: "Sin categoría"
-        val director = data["director"] as? String ?: ""
-        val duration = data["duration"] as? String ?: ""
-        val imageUrl = data["imageUrl"] as? String
-        val rating = (data["rating"] as? Number)?.toDouble() ?: 0.0
-        val reviews = (data["reviews"] as? Number)?.toInt() ?: 0
-
+    private fun mapMovieFromFirestore(data: MovieDto): Movie {
         return Movie(
-            id = id,
-            title = title,
-            year = year,
-            genre = genre,
-            rating = rating,
-            reviews = reviews,
-            description = description,
-            director = director,
-            duration = duration,
-            imageUrl = imageUrl
+            id = data.id,
+            title = data.title,
+            year = data.year,
+            genre = data.genre,
+            rating = data.rating,
+            reviews = data.reviews,
+            description = data.description,
+            director = data.director,
+            duration = data.duration,
+            imageUrl = data.imageUrl
         )
     }
 
-    // ---------- API público ----------
-    
-    suspend fun getAllMovies(): List<Movie> {
+    suspend fun getAllMovies(): Result<List<Movie>> {
         return try {
             Log.d(TAG, "🔥 Llamando a firestoreDataSource.getAllMovies()...")
             val firestoreMovies = firestoreDataSource.getAllMovies()
@@ -50,7 +38,7 @@ class MovieFirebaseRepository @Inject constructor(
             
             val mappedMovies = firestoreMovies.mapNotNull { data ->
                 try {
-                    Log.d(TAG, "🔥 Mapeando película: ${data["title"] ?: "Sin título"}")
+                    Log.d(TAG, "🔥 Mapeando película: ${data.title}")
                     mapMovieFromFirestore(data)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error mapeando película desde Firebase: ${e.message}", e)
@@ -58,17 +46,16 @@ class MovieFirebaseRepository @Inject constructor(
                 }
             }
             Log.d(TAG, "🔥 Mapeadas ${mappedMovies.size} películas exitosamente")
-            mappedMovies
+            Result.success(mappedMovies)
         } catch (e: Exception) {
-            Log.e(TAG, "Error obteniendo películas desde Firebase: ${e.message}", e)
-            emptyList()
+            Result.failure(e)
         }
     }
 
-    suspend fun getMovieById(id: Int): Movie? {
+    suspend fun getMovieById(id: Int): Result<Movie?> {
         return try {
             val firestoreMovie = firestoreDataSource.getMovieById(id)
-            firestoreMovie?.let { data ->
+            val movie = firestoreMovie?.let { data ->
                 try {
                     mapMovieFromFirestore(data)
                 } catch (e: Exception) {
@@ -76,16 +63,16 @@ class MovieFirebaseRepository @Inject constructor(
                     null
                 }
             }
+            Result.success(movie)
         } catch (e: Exception) {
-            Log.e(TAG, "Error obteniendo película $id desde Firebase: ${e.message}", e)
-            null
+            Result.failure(e)
         }
     }
 
-    suspend fun getMoviesByGenre(genre: String): List<Movie> {
+    suspend fun getMoviesByGenre(genre: String): Result<List<Movie>> {
         return try {
             val firestoreMovies = firestoreDataSource.getMoviesByGenre(genre)
-            firestoreMovies.mapNotNull { data ->
+            val movies = firestoreMovies.mapNotNull { data ->
                 try {
                     mapMovieFromFirestore(data)
                 } catch (e: Exception) {
@@ -93,16 +80,16 @@ class MovieFirebaseRepository @Inject constructor(
                     null
                 }
             }
+            Result.success(movies)
         } catch (e: Exception) {
-            Log.e(TAG, "Error obteniendo películas por género desde Firebase: ${e.message}", e)
-            emptyList()
+            Result.failure(e)
         }
     }
 
-    suspend fun searchMovies(query: String): List<Movie> {
+    suspend fun searchMovies(query: String): Result<List<Movie>> {
         return try {
             val firestoreMovies = firestoreDataSource.searchMovies(query)
-            firestoreMovies.mapNotNull { data ->
+            val movies = firestoreMovies.mapNotNull { data ->
                 try {
                     mapMovieFromFirestore(data)
                 } catch (e: Exception) {
@@ -110,24 +97,23 @@ class MovieFirebaseRepository @Inject constructor(
                     null
                 }
             }
+            Result.success(movies)
         } catch (e: Exception) {
-            Log.e(TAG, "Error buscando películas desde Firebase: ${e.message}", e)
-            emptyList()
+            Result.failure(e)
         }
     }
 
     suspend fun getGenres(): List<String> {
-        return try {
-            val movies = getAllMovies()
+        val moviesResult = getAllMovies()
+        return if (moviesResult.isSuccess) {
+            val movies = moviesResult.getOrNull() ?: emptyList()
             listOf("Todos") + movies.mapNotNull { it.genre.takeIf { g -> g.isNotBlank() } }.distinct()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error obteniendo géneros desde Firebase: ${e.message}", e)
+        } else {
             listOf("Todos")
         }
     }
 
-    // Helpers para compatibilidad con UI
-    suspend fun getWatchLaterMovies(): List<Movie> = getAllMovies().take(2)
-    suspend fun getFavoriteMovies(): List<Movie> = getAllMovies().filter { it.rating >= 4.7 }
-    suspend fun getWatchedMovies(): List<Movie> = getAllMovies().takeLast(3)
+    suspend fun getWatchLaterMovies(): List<Movie> = getAllMovies().getOrNull()?.take(2) ?: emptyList()
+    suspend fun getFavoriteMovies(): List<Movie> = getAllMovies().getOrNull()?.filter { it.rating >= 4.7 } ?: emptyList()
+    suspend fun getWatchedMovies(): List<Movie> = getAllMovies().getOrNull()?.takeLast(3) ?: emptyList()
 }

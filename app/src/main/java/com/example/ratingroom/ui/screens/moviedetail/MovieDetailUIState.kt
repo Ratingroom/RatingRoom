@@ -7,5 +7,8 @@ data class MovieDetailUIState(
     val isLoading: Boolean = false,
     val movie: Movie? = null,
     val reviews: List<Review> = emptyList(),
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val showFollowingOnly: Boolean = false,
+    val followingNames: Set<String> = emptySet(),
+    val likedIds: Set<String> = emptySet()
 )

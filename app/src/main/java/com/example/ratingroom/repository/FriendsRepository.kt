@@ -1,6 +1,7 @@
 package com.example.ratingroom.repository
 
 import com.example.ratingroom.data.datasource.FirestoreDataSource
+import com.example.ratingroom.data.dtos.UserDto
 import com.example.ratingroom.data.models.Friend
 import com.example.ratingroom.data.models.FriendActivity
 import com.example.ratingroom.data.models.FriendshipType
@@ -11,15 +12,12 @@ class FriendsRepository @Inject constructor(
     private val authRepository: AuthRepository
 ) {
 
-    private fun mapUserToFriend(userMap: Map<String, Any>): Friend {
-        val uid = userMap["uid"] as? String ?: ""
+    private fun mapUserToFriend(userDto: UserDto): Friend {
+        val uid = userDto.uid
         val idHash = uid.hashCode()
-        val name = (userMap["fullName"] as? String)
-            ?: (userMap["displayName"] as? String)
-            ?: "Usuario"
-        val username = (userMap["username"] as? String)
-            ?: ((userMap["email"] as? String)?.substringBefore("@") ?: "user")
-        val profileImageUrl = userMap["profileImageUrl"] as? String
+        val name = userDto.fullName ?: userDto.displayName ?: "Usuario"
+        val username = userDto.username ?: userDto.email?.substringBefore("@") ?: "user"
+        val profileImageUrl = userDto.profileImageUrl
 
         return Friend(
             id = idHash,
@@ -36,25 +34,43 @@ class FriendsRepository @Inject constructor(
         )
     }
 
-    suspend fun getFollowing(): List<Friend> {
-        val currentUid = authRepository.currentUser?.uid ?: return emptyList()
-        val maps = firestoreDataSource.getFollowing(currentUid)
-        return maps.map { mapUserToFriend(it).copy(isFollowing = true, relationshipType = FriendshipType.FOLLOWING) }
+    suspend fun getFollowing(): Result<List<Friend>> {
+        return try {
+            val currentUid = authRepository.currentUser?.uid 
+                ?: throw IllegalStateException("Usuario no autenticado")
+            val maps = firestoreDataSource.getFollowing(currentUid)
+            val friends = maps.map { mapUserToFriend(it).copy(isFollowing = true, relationshipType = FriendshipType.FOLLOWING) }
+            Result.success(friends)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
-    suspend fun getFollowers(): List<Friend> {
-        val currentUid = authRepository.currentUser?.uid ?: return emptyList()
-        val maps = firestoreDataSource.getFollowers(currentUid)
-        return maps.map { mapUserToFriend(it).copy(relationshipType = FriendshipType.FOLLOWER) }
+    suspend fun getFollowers(): Result<List<Friend>> {
+        return try {
+            val currentUid = authRepository.currentUser?.uid 
+                ?: throw IllegalStateException("Usuario no autenticado")
+            val maps = firestoreDataSource.getFollowers(currentUid)
+            val friends = maps.map { mapUserToFriend(it).copy(relationshipType = FriendshipType.FOLLOWER) }
+            Result.success(friends)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
-    suspend fun getSuggestions(): List<Friend> {
-        val currentUid = authRepository.currentUser?.uid ?: return emptyList()
-        val all = firestoreDataSource.getAllUsers()
-        val followingUids = firestoreDataSource.getFollowing(currentUid).map { it["uid"] as? String }.toSet()
-        val followersUids = firestoreDataSource.getFollowers(currentUid).map { it["uid"] as? String }.toSet()
-        return all.filter { (it["uid"] as? String) != currentUid && !(followingUids.contains(it["uid"] as? String) || followersUids.contains(it["uid"] as? String)) }
-            .map { mapUserToFriend(it) }
+    suspend fun getSuggestions(): Result<List<Friend>> {
+        return try {
+            val currentUid = authRepository.currentUser?.uid 
+                ?: throw IllegalStateException("Usuario no autenticado")
+            val all = firestoreDataSource.getAllUsers()
+            val followingUids = firestoreDataSource.getFollowing(currentUid).map { it.uid }.toSet()
+            val followersUids = firestoreDataSource.getFollowers(currentUid).map { it.uid }.toSet()
+            val suggestions = all.filter { it.uid != currentUid && !(followingUids.contains(it.uid) || followersUids.contains(it.uid)) }
+                .map { mapUserToFriend(it) }
+            Result.success(suggestions)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     suspend fun followUser(targetUid: String) {

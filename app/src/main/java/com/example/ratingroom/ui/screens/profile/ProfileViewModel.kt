@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -45,49 +46,56 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-            val profileResult = async { authRepository.getUserProfile() }
-            val uidHash = authRepository.currentUser?.uid?.hashCode() ?: 0
-            val reviewsResult = async { reviewRepository.listByUser(uidHash) }
+            try {
+                val profileResult = authRepository.getUserProfile()
+                val uidHash = authRepository.currentUser?.uid?.hashCode() ?: 0
+                val reviewsResult = reviewRepository.listByUser(uidHash)
 
-            val (pRes, rList) = awaitAll(profileResult, reviewsResult)
+                if (profileResult.isSuccess && reviewsResult.isSuccess) {
+                    val userProfile = profileResult.getOrNull()!!
+                    val reviews = reviewsResult.getOrNull() ?: emptyList()
 
-            (pRes as Result<UserProfile>).onSuccess { userProfile ->
-                val memberSinceFormatted = userProfile.createdAt?.let { ts ->
-                    try {
-                        val date = Date(ts)
-                        SimpleDateFormat("MMM yyyy", Locale("es")).format(date)
-                    } catch (_: Exception) { null }
+                    val memberSinceFormatted = userProfile.createdAt?.let { ts ->
+                        try {
+                            val date = Date(ts)
+                            SimpleDateFormat("MMM yyyy", Locale("es")).format(date)
+                        } catch (_: Exception) { null }
+                    }
+
+                    val count = reviews.size
+                    val avg = if (count > 0) reviews.map { it.rating }.average() else 0.0
+
+                    val profileData = ProfileData(
+                        name = userProfile.fullName ?: "Usuario",
+                        email = userProfile.email,
+                        memberSince = memberSinceFormatted,
+                        favoriteGenre = userProfile.favoriteGenre,
+                        reviewsCount = count,
+                        averageRating = avg,
+                        profileImageUrl = userProfile.profileImageUrl,
+                        mainMovieId = userProfile.mainMovieId,
+                        followersCount = userProfile.followersCount ?: 0,
+                        followingCount = userProfile.followingCount ?: 0
+                    )
+
+                    val perfilVerificado = verificarIntegridadDatos(profileData)
+
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        profileData = perfilVerificado,
+                        reviews = reviews
+                    )
+
+                    observeUserReviewsRealTime()
+                    observeFollowCounts()
+                } else {
+                    val error = profileResult.exceptionOrNull() ?: reviewsResult.exceptionOrNull()
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error?.message ?: "No se pudo cargar el perfil"
+                    )
                 }
-
-                val reviews = (rList as List<com.example.ratingroom.data.dtos.ReviewDto>)
-                val count = reviews.size
-                val avg = if (count > 0) reviews.map { it.rating }.average() else 0.0
-
-                val profileData = ProfileData(
-                    name = userProfile.fullName ?: "Usuario",
-                    email = userProfile.email,
-                    memberSince = memberSinceFormatted,
-                    favoriteGenre = userProfile.favoriteGenre,
-                    reviewsCount = count,
-                    averageRating = avg,
-                    profileImageUrl = userProfile.profileImageUrl,
-                    mainMovieId = userProfile.mainMovieId,
-                    followersCount = userProfile.followersCount ?: 0,
-                    followingCount = userProfile.followingCount ?: 0
-                )
-
-                // ✅ Verificar integridad básica de los datos del usuario
-                val perfilVerificado = verificarIntegridadDatos(profileData)
-
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    profileData = perfilVerificado,
-                    reviews = reviews
-                )
-
-                observeUserReviewsRealTime()
-                observeFollowCounts()
-            }.onFailure { e ->
+            } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     errorMessage = e.message ?: "No se pudo cargar el perfil"
@@ -157,22 +165,28 @@ class ProfileViewModel @Inject constructor(
 
     fun createReview(articuloId: Int, rating: Int, texto: String) {
         viewModelScope.launch {
-            runCatching {
-                reviewRepository.create(currentUserIdForUi(), articuloId, rating, texto)
-            }.onSuccess { created ->
-                if (created != null) {
-                    val newList = listOf(created) + _uiState.value.reviews
-                    val count = newList.size
-                    val avg = if (count > 0) newList.map { it.rating }.average() else 0.0
-                    _uiState.value = _uiState.value.copy(
-                        reviews = newList,
-                        profileData = _uiState.value.profileData?.copy(
-                            reviewsCount = count,
-                            averageRating = avg
+            try {
+                val result = reviewRepository.create(currentUserIdForUi(), articuloId, rating, texto)
+                if (result.isSuccess) {
+                    val created = result.getOrNull()
+                    if (created != null) {
+                        val newList = listOf(created) + _uiState.value.reviews
+                        val count = newList.size
+                        val avg = if (count > 0) newList.map { it.rating }.average() else 0.0
+                        _uiState.value = _uiState.value.copy(
+                            reviews = newList,
+                            profileData = _uiState.value.profileData?.copy(
+                                reviewsCount = count,
+                                averageRating = avg
+                            )
                         )
+                    }
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = result.exceptionOrNull()?.message
                     )
                 }
-            }.onFailure { e ->
+            } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(errorMessage = e.message)
             }
         }
@@ -180,22 +194,28 @@ class ProfileViewModel @Inject constructor(
 
     fun updateReview(reviewId: Int, rating: Int, texto: String) {
         viewModelScope.launch {
-            runCatching {
-                reviewRepository.update(currentUserIdForUi(), reviewId.toString(), rating, texto)
-            }.onSuccess { updated ->
-                if (updated != null) {
-                    val newList = _uiState.value.reviews.map { if (it.id == reviewId.toString()) updated else it }
-                    val count = newList.size
-                    val avg = if (count > 0) newList.map { it.rating }.average() else 0.0
-                    _uiState.value = _uiState.value.copy(
-                        reviews = newList,
-                        profileData = _uiState.value.profileData?.copy(
-                            reviewsCount = count,
-                            averageRating = avg
+            try {
+                val result = reviewRepository.update(currentUserIdForUi(), reviewId.toString(), rating, texto)
+                if (result.isSuccess) {
+                    val updated = result.getOrNull()
+                    if (updated != null) {
+                        val newList = _uiState.value.reviews.map { if (it.id == reviewId.toString()) updated else it }
+                        val count = newList.size
+                        val avg = if (count > 0) newList.map { it.rating }.average() else 0.0
+                        _uiState.value = _uiState.value.copy(
+                            reviews = newList,
+                            profileData = _uiState.value.profileData?.copy(
+                                reviewsCount = count,
+                                averageRating = avg
+                            )
                         )
+                    }
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = result.exceptionOrNull()?.message
                     )
                 }
-            }.onFailure { e ->
+            } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(errorMessage = e.message)
             }
         }
@@ -203,8 +223,10 @@ class ProfileViewModel @Inject constructor(
 
     fun deleteReview(reviewId: Int) {
         viewModelScope.launch {
-            runCatching { reviewRepository.delete(currentUserIdForUi(), reviewId.toString()) }
-                .onSuccess { ok ->
+            try {
+                val result = reviewRepository.delete(currentUserIdForUi(), reviewId.toString())
+                if (result.isSuccess) {
+                    val ok = result.getOrNull() ?: false
                     if (ok) {
                         val newList = _uiState.value.reviews.filterNot { it.id == reviewId.toString() }
                         val count = newList.size
@@ -217,10 +239,14 @@ class ProfileViewModel @Inject constructor(
                             )
                         )
                     }
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = result.exceptionOrNull()?.message
+                    )
                 }
-                .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(errorMessage = e.message)
-                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
+            }
         }
     }
 
@@ -269,75 +295,65 @@ class ProfileViewModel @Inject constructor(
     }
 
     // ---------- Seguidores / Seguidos ----------
-    private val _followers = MutableStateFlow<List<UserProfile>>(emptyList())
-    val followers: StateFlow<List<UserProfile>> = _followers.asStateFlow()
-
-    private val _following = MutableStateFlow<List<UserProfile>>(emptyList())
-    val following: StateFlow<List<UserProfile>> = _following.asStateFlow()
-
-    private val _isLoadingFollowers = MutableStateFlow(false)
-    val isLoadingFollowers: StateFlow<Boolean> = _isLoadingFollowers.asStateFlow()
-
-    private val _isLoadingFollowing = MutableStateFlow(false)
-    val isLoadingFollowing: StateFlow<Boolean> = _isLoadingFollowing.asStateFlow()
-
     fun loadFollowers() {
         viewModelScope.launch {
-            _isLoadingFollowers.value = true
-            authRepository.getFollowers()
-                .onSuccess { followersList ->
-                    _followers.value = followersList
-                }
-                .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = e.message ?: "No se pudieron cargar los seguidores"
-                    )
-                }
-            _isLoadingFollowers.value = false
+            _uiState.update { it.copy(isLoadingFollowers = true) }
+            val result = authRepository.getFollowers()
+            if (result.isSuccess) {
+                _uiState.update { it.copy(
+                    followers = result.getOrNull() ?: emptyList(),
+                    isLoadingFollowers = false
+                ) }
+            } else {
+                _uiState.update { it.copy(
+                    errorMessage = result.exceptionOrNull()?.message ?: "No se pudieron cargar los seguidores",
+                    isLoadingFollowers = false
+                ) }
+            }
         }
     }
 
     fun loadFollowing() {
         viewModelScope.launch {
-            _isLoadingFollowing.value = true
-            authRepository.getFollowing()
-                .onSuccess { followingList ->
-                    _following.value = followingList
-                }
-                .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = e.message ?: "No se pudieron cargar los usuarios seguidos"
-                    )
-                }
-            _isLoadingFollowing.value = false
+            _uiState.update { it.copy(isLoadingFollowing = true) }
+            val result = authRepository.getFollowing()
+            if (result.isSuccess) {
+                _uiState.update { it.copy(
+                    following = result.getOrNull() ?: emptyList(),
+                    isLoadingFollowing = false
+                ) }
+            } else {
+                _uiState.update { it.copy(
+                    errorMessage = result.exceptionOrNull()?.message ?: "No se pudieron cargar los usuarios seguidos",
+                    isLoadingFollowing = false
+                ) }
+            }
         }
     }
 
     fun followUser(userId: String) {
         viewModelScope.launch {
-            authRepository.followUser(userId)
-                .onSuccess { success ->
-                    if (success) loadFollowing()
-                }
-                .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = e.message ?: "No se pudo seguir al usuario"
-                    )
-                }
+            try {
+                val success = authRepository.followUser(userId)
+                if (success) loadFollowing()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = e.message ?: "No se pudo seguir al usuario"
+                )
+            }
         }
     }
 
     fun unfollowUser(userId: String) {
         viewModelScope.launch {
-            authRepository.unfollowUser(userId)
-                .onSuccess { success ->
-                    if (success) loadFollowing()
-                }
-                .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = e.message ?: "No se pudo dejar de seguir al usuario"
-                    )
-                }
+            try {
+                val success = authRepository.unfollowUser(userId)
+                if (success) loadFollowing()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = e.message ?: "No se pudo dejar de seguir al usuario"
+                )
+            }
         }
     }
 

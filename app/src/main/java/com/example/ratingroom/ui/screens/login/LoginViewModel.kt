@@ -66,26 +66,27 @@ class LoginViewModel @Inject constructor(
 
             // Realizar login usando AuthRepository (retorna Result<FirebaseUser>)
             println("LoginViewModel: Iniciando login")
-            authRepository.signIn(
+            val result = authRepository.signIn(
                 email = currentState.username,
                 password = currentState.password
             )
-                .onSuccess { user ->
-                    println("LoginViewModel: Login exitoso para uid=${user.uid}")
-                    
-                    // 🔔 Obtener y guardar token FCM después del login
-                    fcmTokenManager.refreshFCMToken()
-                    
-                    _uiState.value = _uiState.value.copy(isLoading = false)
-                    onSuccess()
-                }
-                .onFailure { e ->
-                    println("LoginViewModel: Login falló - ${e.message}")
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = e.message ?: "Error de autenticación"
-                    )
-                }
+
+            if (result.isSuccess) {
+                val user = result.getOrNull()
+                println("LoginViewModel: Login exitoso para uid=${user?.uid}")
+                
+                fcmTokenManager.refreshFCMToken()
+                
+                _uiState.value = _uiState.value.copy(isLoading = false)
+                onSuccess()
+            } else {
+                val error = result.exceptionOrNull()
+                println("LoginViewModel: Login falló - ${error?.message}")
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = error?.message ?: "Error de autenticación"
+                )
+            }
         }
     }
 

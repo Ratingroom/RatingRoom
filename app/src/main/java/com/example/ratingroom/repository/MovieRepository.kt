@@ -194,9 +194,10 @@ class MovieRepository @Inject constructor(
         Log.d(TAG, "🎬 Iniciando carga de películas...")
         
         // 1️⃣ Intentar Firebase primero
-        try {
-            Log.d(TAG, "🔥 Intentando cargar desde Firebase...")
-            val firebaseMovies = firebaseRepository.getAllMovies()
+        Log.d(TAG, "🔥 Intentando cargar desde Firebase...")
+        val firebaseResult = firebaseRepository.getAllMovies()
+        if (firebaseResult.isSuccess) {
+            val firebaseMovies = firebaseResult.getOrNull() ?: emptyList()
             Log.d(TAG, "🔥 Firebase devolvió ${firebaseMovies.size} películas")
             if (firebaseMovies.isNotEmpty()) {
                 Log.d(TAG, "✅ Películas cargadas desde Firebase: ${firebaseMovies.size}")
@@ -204,8 +205,8 @@ class MovieRepository @Inject constructor(
             } else {
                 Log.w(TAG, "⚠️ Firebase devolvió lista vacía")
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "⚠️ Error en Firebase, intentando REST API: ${e.message}", e)
+        } else {
+            Log.w(TAG, "⚠️ Error en Firebase, intentando REST API: ${firebaseResult.exceptionOrNull()?.message}")
         }
 
         // 2️⃣ Fallback a REST API (opcional)
@@ -233,14 +234,15 @@ class MovieRepository @Inject constructor(
 
     suspend fun getMoviesByGenre(genre: String): List<Movie> {
         // 1️⃣ Intentar Firebase primero
-        try {
-            val firebaseMovies = firebaseRepository.getMoviesByGenre(genre)
+        val firebaseResult = firebaseRepository.getMoviesByGenre(genre)
+        if (firebaseResult.isSuccess) {
+            val firebaseMovies = firebaseResult.getOrNull() ?: emptyList()
             if (firebaseMovies.isNotEmpty()) {
                 Log.d(TAG, "✅ Películas por género '$genre' cargadas desde Firebase: ${firebaseMovies.size}")
                 return firebaseMovies
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "⚠️ Error en Firebase para género '$genre', usando fallback: ${e.message}")
+        } else {
+            Log.w(TAG, "⚠️ Error en Firebase para género '$genre', usando fallback: ${firebaseResult.exceptionOrNull()?.message}")
         }
 
         // 2️⃣ Fallback a REST API
@@ -253,14 +255,15 @@ class MovieRepository @Inject constructor(
         if (q.isEmpty()) return getAllMovies()
 
         // 1️⃣ Intentar Firebase primero
-        try {
-            val firebaseMovies = firebaseRepository.searchMovies(q)
+        val firebaseResult = firebaseRepository.searchMovies(q)
+        if (firebaseResult.isSuccess) {
+            val firebaseMovies = firebaseResult.getOrNull() ?: emptyList()
             if (firebaseMovies.isNotEmpty()) {
                 Log.d(TAG, "✅ Búsqueda '$q' desde Firebase: ${firebaseMovies.size} resultados")
                 return firebaseMovies
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "⚠️ Error en Firebase para búsqueda '$q', usando fallback: ${e.message}")
+        } else {
+            Log.w(TAG, "⚠️ Error en Firebase para búsqueda '$q', usando fallback: ${firebaseResult.exceptionOrNull()?.message}")
         }
 
         // 2️⃣ Fallback a REST API
@@ -273,14 +276,15 @@ class MovieRepository @Inject constructor(
 
     suspend fun getMovieById(id: Int): Movie? = withContext(Dispatchers.IO) {
         // 1️⃣ Intentar Firebase primero
-        try {
-            val firebaseMovie = firebaseRepository.getMovieById(id)
+        val firebaseResult = firebaseRepository.getMovieById(id)
+        if (firebaseResult.isSuccess) {
+            val firebaseMovie = firebaseResult.getOrNull()
             if (firebaseMovie != null) {
                 Log.d(TAG, "✅ Película $id cargada desde Firebase")
                 return@withContext firebaseMovie
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "⚠️ Error en Firebase para película $id, intentando REST API: ${e.message}")
+        } else {
+            Log.w(TAG, "⚠️ Error en Firebase para película $id, intentando REST API: ${firebaseResult.exceptionOrNull()?.message}")
         }
 
         // 2️⃣ Fallback a REST API (opcional)

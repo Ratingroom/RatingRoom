@@ -1,28 +1,34 @@
 package com.example.ratingroom.ui.utils
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 
 @Composable
 fun ReviewCard(
     title: String,
-    rating: Int,                // 0..5
+    rating: Int,
     excerpt: String,
     timeAgo: String,
     modifier: Modifier = Modifier,
+    userImageUrl: String? = null,
     onEdit: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     likes: Int = 0,
@@ -40,6 +46,34 @@ fun ReviewCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
+                // User image
+                if (userImageUrl != null && userImageUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = userImageUrl,
+                        contentDescription = "Imagen de perfil",
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Surface(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape),
+                        color = cs.primaryContainer
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Usuario",
+                            modifier = Modifier.padding(8.dp),
+                            tint = cs.onPrimaryContainer
+                        )
+                    }
+                }
+                
+                Spacer(Modifier.width(12.dp))
+                
                 Column(modifier = Modifier.weight(1f)) {
                     Text(title, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
                     Spacer(Modifier.height(4.dp))

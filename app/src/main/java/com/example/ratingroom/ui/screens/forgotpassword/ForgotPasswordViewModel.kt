@@ -45,21 +45,20 @@ class ForgotPasswordViewModel @Inject constructor(
                 }
             }
 
-            // Llamar al repo (ahora retorna Result<Unit>)
-            authRepository.sendPasswordResetEmail(currentState.email)
-                .onSuccess {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        successMessage = "Se ha enviado un enlace de recuperación a tu email"
-                    )
-                    onSuccess()
-                }
-                .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = e.message ?: "Error al enviar email de recuperación"
-                    )
-                }
+            // Llamar al repo (ahora solo suspend, sin Result)
+            try {
+                authRepository.sendPasswordResetEmail(currentState.email)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    successMessage = "Se ha enviado un enlace de recuperación a tu email"
+                )
+                onSuccess()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = e.message ?: "Error al enviar email de recuperación"
+                )
+            }
         }
     }
 
