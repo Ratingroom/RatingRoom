@@ -40,7 +40,7 @@ class FriendViewModel @Inject constructor(
         _ui.value = _ui.value.copy(isLoading = true, errorMessage = null)
 
         viewModelScope.launch {
-            runCatching {
+            try {
                 val doc = firestore.collection("users").document(userId).get().await()
                 if (!doc.exists()) error("Usuario no encontrado")
 
@@ -53,24 +53,24 @@ class FriendViewModel @Inject constructor(
                     SimpleDateFormat("MMM yyyy", Locale("es")).format(Date(it))
                 }
 
-                ProfileData(
+                val profile = ProfileData(
                     name = name,
                     email = email,
                     memberSince = memberSince,
                     favoriteGenre = favorite,
-                    reviewsCount = 0,        // se recalcula con las reseñas en vivo
-                    averageRating = 0.0,     // idem
+                    reviewsCount = 0,
+                    averageRating = 0.0,
                     profileImageUrl = photo,
                     mainMovieId = (doc.get("mainMovieId") as? Number)?.toInt(),
                     followersCount = (doc.get("followersCount") as? Number)?.toInt() ?: 0,
                     followingCount = (doc.get("followingCount") as? Number)?.toInt() ?: 0
                 )
-            }.onSuccess { profile ->
+                
                 _ui.value = _ui.value.copy(isLoading = false, profile = profile)
                 observeCounts()
                 observeAmIFollowing()
-                observeUserReviews()   // ⬅️ reseñas en tiempo real
-            }.onFailure { e ->
+                observeUserReviews()
+            } catch (e: Exception) {
                 _ui.value = _ui.value.copy(isLoading = false, errorMessage = e.message ?: "Error")
             }
         }
@@ -112,7 +112,7 @@ class FriendViewModel @Inject constructor(
         val me = authRepo.currentUser?.uid ?: return
         val target = targetUid ?: return
         viewModelScope.launch {
-            runCatching {
+            try {
                 val myFollowing = firestore.collection("users").document(me)
                     .collection("following").document(target)
                 val isFollowingNow = _ui.value.isFollowing
@@ -126,7 +126,9 @@ class FriendViewModel @Inject constructor(
                         .collection("followers").document(me)
                         .set(mapOf("createdAt" to System.currentTimeMillis())).await()
                 }
-            }.onFailure { e -> Log.e("FriendVM", "toggleFollow: ${e.message}", e) }
+            } catch (e: Exception) {
+                Log.e("FriendVM", "toggleFollow: ${e.message}", e)
+            }
         }
     }
 
@@ -145,7 +147,7 @@ class FriendViewModel @Inject constructor(
     private fun loadNames(coll: String, done: (List<String>) -> Unit) {
         val uid = targetUid ?: return
         viewModelScope.launch {
-            runCatching {
+            try {
                 val ids = firestore.collection("users").document(uid)
                     .collection(coll).get().await().documents.map { it.id }
                 if (ids.isEmpty()) { done(emptyList()); return@launch }
@@ -159,7 +161,9 @@ class FriendViewModel @Inject constructor(
                     }
                 }
                 done(names.sorted())
-            }.onFailure { done(emptyList()) }
+            } catch (e: Exception) {
+                done(emptyList())
+            }
         }
     }
 

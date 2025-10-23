@@ -287,14 +287,15 @@ private fun LogoutSection(
                 Icon(
                     imageVector = Icons.Default.ExitToApp,
                     contentDescription = "Cerrar sesión",
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = Color(0xFFD32F2F), // Rojo brillante
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
                     text = "Cerrar sesión",
                     fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.error
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFFD32F2F) // Rojo brillante
                 )
             }
         }

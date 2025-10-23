@@ -1,5 +1,9 @@
 package com.example.ratingroom.data.datasource
 
+import com.example.ratingroom.data.dtos.MovieDto
+import com.example.ratingroom.data.dtos.NotificationDto
+import com.example.ratingroom.data.dtos.ReviewDto
+import com.example.ratingroom.data.dtos.UserDto
 import kotlinx.coroutines.flow.Flow
 
 interface FirestoreDataSource {
@@ -25,21 +29,21 @@ interface FirestoreDataSource {
         mainMovieId: Int? = null
     )
 
-    suspend fun getUserProfile(): Map<String, Any>?
-    suspend fun getUserProfileById(userId: String): Map<String, Any>?
+    suspend fun getUserProfile(): UserDto?
+    suspend fun getUserProfileById(userId: String): UserDto?
 
     // ------- Amigos --------
-    suspend fun getAllUsers(): List<Map<String, Any>>
+    suspend fun getAllUsers(): List<UserDto>
     suspend fun followUser(targetUserId: String): Boolean
     suspend fun unfollowUser(targetUserId: String): Boolean
-    suspend fun getFollowers(userId: String): List<Map<String, Any>>
-    suspend fun getFollowing(userId: String): List<Map<String, Any>>
+    suspend fun getFollowers(userId: String): List<UserDto>
+    suspend fun getFollowing(userId: String): List<UserDto>
 
     // ------- Películas --------
-    suspend fun getAllMovies(): List<Map<String, Any>>
-    suspend fun getMovieById(movieId: Int): Map<String, Any>?
-    suspend fun getMoviesByGenre(genre: String): List<Map<String, Any>>
-    suspend fun searchMovies(query: String): List<Map<String, Any>>
+    suspend fun getAllMovies(): List<MovieDto>
+    suspend fun getMovieById(movieId: Int): MovieDto?
+    suspend fun getMoviesByGenre(genre: String): List<MovieDto>
+    suspend fun searchMovies(query: String): List<MovieDto>
 
     // ------- Reseñas --------
     suspend fun createReviewFanout(
@@ -49,14 +53,14 @@ interface FirestoreDataSource {
         text: String
     ): String
 
-    suspend fun getReviewsByMovie(movieId: Int): List<Map<String, Any>>
-    suspend fun getReviewsByUser(userId: String): List<Map<String, Any>>
-    fun observeReviewsByMovie(movieId: Int): Flow<List<Map<String, Any>>>
-    fun observeReviewsByUser(userId: String): Flow<List<Map<String, Any>>>
+    suspend fun getReviewsByMovie(movieId: Int): List<ReviewDto>
+    suspend fun getReviewsByUser(userId: String): List<ReviewDto>
+    fun observeReviewsByMovie(movieId: Int): Flow<List<ReviewDto>>
+    fun observeReviewsByUser(userId: String): Flow<List<ReviewDto>>
     suspend fun sendOrDeleteLike(reviewId: String, userId: String): Boolean
 
     // ------- Notificaciones --------
-    fun observeNotifications(userId: String): Flow<List<Map<String, Any>>>
+    fun observeNotifications(userId: String): Flow<List<NotificationDto>>
     suspend fun markNotificationSeen(userId: String, notificationId: String)
     suspend fun markAllNotificationsSeen(userId: String)
 }

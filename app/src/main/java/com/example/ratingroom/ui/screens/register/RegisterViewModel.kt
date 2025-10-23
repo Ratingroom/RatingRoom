@@ -127,28 +127,29 @@ class RegisterViewModel @Inject constructor(
 
             // Realizar registro usando AuthRepository (ahora devuelve Result<FirebaseUser>)
             println("RegisterViewModel: Iniciando registro")
-            authRepository.signUp(
+            val result = authRepository.signUp(
                 email = currentState.email,
                 password = currentState.password,
                 displayName = currentState.fullName,
                 favoriteGenre = currentState.favoriteGenre.takeIf { it.isNotBlank() },
                 birthYear = currentState.birthYear.takeIf { it.isNotBlank() }
             )
-                .onSuccess {
-                    println("RegisterViewModel: Registro exitoso - Usuario creado en Auth y Firestore")
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        successMessage = "Registro exitoso"
-                    )
-                    onSuccess()
-                }
-                .onFailure { e ->
-                    println("RegisterViewModel: Registro falló - ${e.message}")
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = e.message ?: "Error al crear cuenta"
-                    )
-                }
+
+            if (result.isSuccess) {
+                println("RegisterViewModel: Registro exitoso - Usuario creado en Auth y Firestore")
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    successMessage = "Registro exitoso"
+                )
+                onSuccess()
+            } else {
+                val error = result.exceptionOrNull()
+                println("RegisterViewModel: Registro falló - ${error?.message}")
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = error?.message ?: "Error al crear cuenta"
+                )
+            }
         }
     }
 

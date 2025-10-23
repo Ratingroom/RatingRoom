@@ -26,7 +26,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -51,9 +52,7 @@ dependencies {
     // Hilt
     implementation(libs.dagger.hilt)
     implementation(libs.hilt.compose.navigation)
-    // kapt(libs.dagger.kapt)               // ❌ FUERA KAPT
-    // Si tu libs.versions.toml NO define un alias para el compiler, usa explícito:
-    ksp("com.google.dagger:hilt-android-compiler:2.51.1")   // ✅ KSP compiler
+    ksp("com.google.dagger:hilt-android-compiler:2.51.1")
 
     // Firebase (BOM)
     implementation(platform(libs.firebase.bom))
@@ -99,5 +98,9 @@ dependencies {
 
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-messaging")
+
+    implementation("androidx.credentials:credentials:1.6.0-beta03")
+    implementation("androidx.credentials:credentials-play-services-auth:1.6.0-beta03")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.0")
 
 }

@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -13,11 +14,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.example.ratingroom.data.models.Review
 import com.example.ratingroom.ui.utils.MoviePoster
 
@@ -29,7 +33,6 @@ fun MovieDetailRoute(
 ) {
     LaunchedEffect(movieId) { viewModel.loadMovieDetail(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val followingOnly by viewModel.showFollowingOnly.collectAsStateWithLifecycle() // NUEVO
 
     MovieDetailScreen(
         uiState = uiState,
@@ -39,8 +42,8 @@ fun MovieDetailRoute(
         onClearError = { viewModel.clearError() },
         onCreateReview = { rating, texto -> viewModel.createReview(movieId, rating, texto) },
         onLikeClick = { reviewId, userId -> viewModel.sendOrDeleteLike(reviewId, userId) },
-        followingOnly = followingOnly,                               // NUEVO
-        onToggleFollowingOnly = { viewModel.setShowFollowingOnly(it) } // NUEVO
+        followingOnly = uiState.showFollowingOnly,
+        onToggleFollowingOnly = { viewModel.setShowFollowingOnly(it) }
     )
 }
 
@@ -250,27 +253,21 @@ private fun ReviewItem(
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
-            // 🎯 Header con información del usuario
+            // Header con información del usuario
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Avatar o inicial
+                // Avatar con imagen real
                 if (!review.userImageUrl.isNullOrEmpty()) {
-                    // TODO: Cargar imagen con Coil o similar
-                    Surface(
-                        shape = androidx.compose.foundation.shape.CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = review.userName?.firstOrNull()?.uppercase() ?: "?",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                    AsyncImage(
+                        model = review.userImageUrl,
+                        contentDescription = "Imagen de perfil de ${review.userName}",
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
                 } else {
                     Surface(
                         shape = androidx.compose.foundation.shape.CircleShape,

@@ -38,7 +38,12 @@ class ReviewsViewModel @Inject constructor(
             try {
                 println("ReviewsViewModel: Iniciando carga de reseñas para usuario $HARDCODED_USER_ID")
                 
-                val userReviews = reviewRepository.listByUser(HARDCODED_USER_ID)
+                val reviewsResult = reviewRepository.listByUser(HARDCODED_USER_ID)
+                if (!reviewsResult.isSuccess) {
+                    throw reviewsResult.exceptionOrNull() ?: Exception("Error al cargar reseñas")
+                }
+                
+                val userReviews = reviewsResult.getOrNull() ?: emptyList()
                 println("ReviewsViewModel: Reseñas obtenidas del backend: ${userReviews.size}")
                 userReviews.forEach { review ->
                     println("ReviewsViewModel: Review ID=${review.id}, Rating=${review.rating}, PeliculaID=${review.pelicula_id}")
@@ -106,17 +111,20 @@ class ReviewsViewModel @Inject constructor(
     fun editReview(reviewId: String, rating: Int, texto: String) {
         viewModelScope.launch {
             try {
-                val updated = reviewRepository.update(HARDCODED_USER_ID, reviewId, rating, texto)
-                if (updated != null) {
-                    // Actualizar la reseña en la lista local
-                    val updatedReviews = _uiState.value.reviews.map { review ->
-                        if (review.id == reviewId) {
-                            review.copy(rating = updated.rating, comment = updated.texto)
-                        } else {
-                            review
+                val result = reviewRepository.update(HARDCODED_USER_ID, reviewId, rating, texto)
+                if (result.isSuccess) {
+                    val updated = result.getOrNull()
+                    if (updated != null) {
+                        // Actualizar la reseña en la lista local
+                        val updatedReviews = _uiState.value.reviews.map { review ->
+                            if (review.id == reviewId) {
+                                review.copy(rating = updated.rating, comment = updated.texto)
+                            } else {
+                                review
+                            }
                         }
+                        _uiState.value = _uiState.value.copy(reviews = updatedReviews)
                     }
-                    _uiState.value = _uiState.value.copy(reviews = updatedReviews)
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(errorMessage = e.message)
@@ -127,8 +135,8 @@ class ReviewsViewModel @Inject constructor(
     fun deleteReview(reviewId: String) {
         viewModelScope.launch {
             try {
-                val success = reviewRepository.delete(HARDCODED_USER_ID, reviewId)
-                if (success) {
+                val result = reviewRepository.delete(HARDCODED_USER_ID, reviewId)
+                if (result.isSuccess && result.getOrNull() == true) {
                     // Remover la reseña de la lista local
                     val updatedReviews = _uiState.value.reviews.filter { it.id != reviewId }
                     _uiState.value = _uiState.value.copy(reviews = updatedReviews)

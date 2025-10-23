@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -282,7 +283,7 @@ fun ProfileSettings(
             items = listOf(
                 SettingsItem("edit", "Editar perfil", Icons.Filled.Person),
                 SettingsItem("privacy", "Configuración de privacidad", Icons.Filled.Lock),
-                SettingsItem("logout", "Cerrar sesión", Icons.Filled.Logout, tint = colorScheme.error)
+                SettingsItem("logout", "Cerrar sesión", Icons.Filled.Logout, tint = Color(0xFFD32F2F)) // Rojo brillante
             ),
             onItemClick = { id ->
                 when (id) {

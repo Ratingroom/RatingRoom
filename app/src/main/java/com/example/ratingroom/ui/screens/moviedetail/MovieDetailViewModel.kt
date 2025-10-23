@@ -36,14 +36,8 @@ class MovieDetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(MovieDetailUIState())
     val uiState: StateFlow<MovieDetailUIState> = _uiState.asStateFlow()
 
-    private val _showFollowingOnly = MutableStateFlow(false)
-    val showFollowingOnly: StateFlow<Boolean> = _showFollowingOnly.asStateFlow()
-
-    private val _followingNames = MutableStateFlow<Set<String>>(emptySet())
-    private val _likedIds = MutableStateFlow<Set<String>>(emptySet())
-
     fun setShowFollowingOnly(enabled: Boolean) {
-        _showFollowingOnly.value = enabled
+        _uiState.update { it.copy(showFollowingOnly = enabled) }
         if (enabled) refreshFollowingNames()
         _uiState.update { st -> st.copy(reviews = applyFilterIfNeeded(st.reviews)) }
     }
@@ -53,19 +47,28 @@ class MovieDetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             observeMyLikes()
 
-            runCatching {
+            try {
                 val movie = movieRepository.getMovieById(movieId)
-                val reviewsDto = reviewRepository.getReviewsByMovie(movieId)
-                val mapped = mapReviewsFromDto(reviewsDto, _likedIds.value)
-                movie to mapped
-            }.onSuccess { (movie, reviews) ->
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    movie = movie,
-                    reviews = applyFilterIfNeeded(reviews)
-                )
-                observeReviewsRealTime(movieId)
-            }.onFailure { e ->
+                val reviewsResult = reviewRepository.getReviewsByMovie(movieId)
+                
+                if (reviewsResult.isSuccess) {
+                    val reviewsDto = reviewsResult.getOrNull() ?: emptyList()
+                    val mapped = mapReviewsFromDto(reviewsDto, _uiState.value.likedIds)
+                    
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        movie = movie,
+                        reviews = applyFilterIfNeeded(mapped)
+                    )
+                    observeReviewsRealTime(movieId)
+                } else {
+                    val error = reviewsResult.exceptionOrNull()
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error?.message ?: "Error al cargar detalle"
+                    )
+                }
+            } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     errorMessage = e.message ?: "Error al cargar detalle"
@@ -76,16 +79,11 @@ class MovieDetailViewModel @Inject constructor(
 
     private fun observeReviewsRealTime(movieId: Int) {
         viewModelScope.launch {
-            combine(
-                reviewRepository.observeReviewsByMovie(movieId),
-                showFollowingOnly,
-                _followingNames,
-                _likedIds
-            ) { reviewsDto, followingOnly, followingNames, likedIds ->
-                val all = mapReviewsFromDto(reviewsDto, likedIds)
-                if (!followingOnly) all else filterByFollowingNames(all, followingNames)
-            }.collectLatest { list ->
-                _uiState.update { it.copy(reviews = list) }
+            reviewRepository.observeReviewsByMovie(movieId).collectLatest { reviewsDto ->
+                val all = mapReviewsFromDto(reviewsDto, _uiState.value.likedIds)
+                val filtered = if (!_uiState.value.showFollowingOnly) all 
+                    else filterByFollowingNames(all, _uiState.value.followingNames)
+                _uiState.update { it.copy(reviews = filtered) }
             }
         }
     }
@@ -93,7 +91,7 @@ class MovieDetailViewModel @Inject constructor(
     private fun observeMyLikes() {
         val uid = getCurrentUserId()
         if (uid.isBlank() || uid == "anonymous") {
-            _likedIds.value = emptySet()
+            _uiState.update { it.copy(likedIds = emptySet()) }
             return
         }
         firestore.collection("users")
@@ -105,17 +103,20 @@ class MovieDetailViewModel @Inject constructor(
                     return@addSnapshotListener
                 }
                 if (snap != null) {
-                    _likedIds.value = snap.documents.map { it.id }.toSet()
+                    val likedIds = snap.documents.map { it.id }.toSet()
                     _uiState.update { st ->
-                        st.copy(reviews = st.reviews.map { r -> r.copy(isLiked = r.id in _likedIds.value) })
+                        st.copy(
+                            likedIds = likedIds,
+                            reviews = st.reviews.map { r -> r.copy(isLiked = r.id in likedIds) }
+                        )
                     }
                 }
             }
     }
 
     private fun applyFilterIfNeeded(all: List<Review>): List<Review> {
-        return if (!_showFollowingOnly.value) all
-        else filterByFollowingNames(all, _followingNames.value)
+        return if (!_uiState.value.showFollowingOnly) all
+        else filterByFollowingNames(all, _uiState.value.followingNames)
     }
 
     private fun filterByFollowingNames(
@@ -135,7 +136,7 @@ class MovieDetailViewModel @Inject constructor(
     private fun refreshFollowingNames() {
         val currentUid = getCurrentUserId()
         if (currentUid.isBlank() || currentUid == "anonymous") {
-            _followingNames.value = emptySet()
+            _uiState.update { it.copy(followingNames = emptySet()) }
             return
         }
         viewModelScope.launch {
@@ -148,8 +149,12 @@ class MovieDetailViewModel @Inject constructor(
 
                 val followingIds = followingSnap.documents.map { it.id }
                 if (followingIds.isEmpty()) {
-                    _followingNames.value = emptySet()
-                    _uiState.update { st -> st.copy(reviews = applyFilterIfNeeded(st.reviews)) }
+                    _uiState.update { st -> 
+                        st.copy(
+                            followingNames = emptySet(),
+                            reviews = applyFilterIfNeeded(st.reviews)
+                        )
+                    }
                     return@launch
                 }
 
@@ -165,12 +170,20 @@ class MovieDetailViewModel @Inject constructor(
                     }
                 }
 
-                _followingNames.value = names
-                _uiState.update { st -> st.copy(reviews = applyFilterIfNeeded(st.reviews)) }
+                _uiState.update { st -> 
+                    st.copy(
+                        followingNames = names,
+                        reviews = applyFilterIfNeeded(st.reviews)
+                    )
+                }
             } catch (e: Exception) {
                 Log.e("MovieDetailVM", "Error cargando seguidos: ${e.message}", e)
-                _followingNames.value = emptySet()
-                _uiState.update { st -> st.copy(reviews = applyFilterIfNeeded(st.reviews)) }
+                _uiState.update { st -> 
+                    st.copy(
+                        followingNames = emptySet(),
+                        reviews = applyFilterIfNeeded(st.reviews)
+                    )
+                }
             }
         }
     }
@@ -201,12 +214,18 @@ class MovieDetailViewModel @Inject constructor(
 
     fun createReview(movieId: Int, rating: Int, texto: String) {
         viewModelScope.launch {
-            runCatching {
-                reviewRepository.create(HARDCODED_USER_ID, movieId, rating, texto)
-            }.onSuccess { loadMovieDetail(movieId) }
-                .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(errorMessage = e.message)
+            try {
+                val result = reviewRepository.create(HARDCODED_USER_ID, movieId, rating, texto)
+                if (result.isSuccess) {
+                    loadMovieDetail(movieId)
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = result.exceptionOrNull()?.message
+                    )
                 }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
+            }
         }
     }
 

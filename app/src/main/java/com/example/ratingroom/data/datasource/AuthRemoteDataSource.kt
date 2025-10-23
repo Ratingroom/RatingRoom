@@ -6,6 +6,7 @@ interface AuthRemoteDataSource {
     val currentUser: FirebaseUser?
     suspend fun signIn(email: String, password: String): FirebaseUser?
     suspend fun signUp(email: String, password: String, displayName: String?): FirebaseUser?
+    suspend fun signInWithGoogle(idToken: String): FirebaseUser?
     suspend fun sendPasswordResetEmail(email: String)
     suspend fun updateUserEmail(newEmail: String)
     suspend fun updateDisplayName(displayName: String)

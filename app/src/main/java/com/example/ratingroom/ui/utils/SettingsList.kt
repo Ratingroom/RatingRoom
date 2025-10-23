@@ -35,11 +35,23 @@ fun SettingsList(
                     .padding(vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(item.icon, contentDescription = null, tint = item.tint ?: cs.onSurfaceVariant)
+                Icon(
+                    imageVector = item.icon, 
+                    contentDescription = null, 
+                    tint = item.tint ?: cs.onSurfaceVariant
+                )
                 Spacer(Modifier.width(12.dp))
-                Text(item.label, color = item.tint ?: cs.onSurface)
+                Text(
+                    text = item.label, 
+                    color = item.tint ?: cs.onSurface,
+                    style = MaterialTheme.typography.bodyLarge
+                )
                 Spacer(Modifier.weight(1f))
-                Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = cs.onSurfaceVariant)
+                Icon(
+                    imageVector = Icons.Filled.ChevronRight, 
+                    contentDescription = null, 
+                    tint = cs.onSurfaceVariant
+                )
             }
             if (index != items.lastIndex) {
                 HorizontalDivider()

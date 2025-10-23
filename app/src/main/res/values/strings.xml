@@ -17,6 +17,8 @@
     <string name="login_register_link">Regístrate aquí</string>
     <string name="login_button">Iniciar sesión</string>
     <string name="login_demo_text">Demo: usa cualquier email y contraseña</string>
+    <string name="login_or">o</string>
+    <string name="login_with_google">Continuar con Google</string>
     
     <string name="forgot_password_title">Recuperar Contraseña</string>
     <string name="forgot_password_subtitle">Ingresa tu email y te enviaremos un enlace para restablecer tu contraseña</string>
@@ -163,5 +165,6 @@
     <string name="favorite_genre">Género favorito</string>
     <string name="birth_year">Año de nacimiento</string>
     <string name="accept_terms">Acepto los términos</string>
+    <string name="web_client">563247052682-a70t41edrvnh05kttca854qdiditauu7.apps.googleusercontent.com</string>
     
 </resources>

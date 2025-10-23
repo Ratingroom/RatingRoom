@@ -34,27 +34,28 @@ class EditProfileViewModel @Inject constructor(
     private fun loadCurrentProfile() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            authRepository.getUserProfile()
-                .onSuccess { userProfile ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        displayName = userProfile.fullName ?: "",
-                        email = userProfile.email, // viene de Auth/Firestore
-                        biography = userProfile.biography ?: "",
-                        location = userProfile.location ?: "",
-                        favoriteGenre = userProfile.favoriteGenre ?: "",
-                        birthdate = userProfile.birthdate ?: "",
-                        website = userProfile.website ?: "",
-                        // para previsualización si ya hay imagen en profile
-                        profileImageUri = userProfile.profileImageUrl
-                    )
-                }
-                .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = e.message ?: "No se pudo cargar el perfil"
-                    )
-                }
+            val result = authRepository.getUserProfile()
+            
+            if (result.isSuccess) {
+                val userProfile = result.getOrNull()
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    displayName = userProfile?.fullName ?: "",
+                    email = userProfile?.email ?: "",
+                    biography = userProfile?.biography ?: "",
+                    location = userProfile?.location ?: "",
+                    favoriteGenre = userProfile?.favoriteGenre ?: "",
+                    birthdate = userProfile?.birthdate ?: "",
+                    website = userProfile?.website ?: "",
+                    profileImageUri = userProfile?.profileImageUrl
+                )
+            } else {
+                val error = result.exceptionOrNull()
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = error?.message ?: "No se pudo cargar el perfil"
+                )
+            }
         }
     }
 
@@ -182,32 +183,31 @@ class EditProfileViewModel @Inject constructor(
 
                 println("SaveProfile: Actualizando perfil. emailToUpdate=${emailToUpdate ?: "(sin cambio)"}")
 
-                authRepository.updateUserProfile(
-                    displayName = currentState.displayName,
-                    email = emailToUpdate,                  // <-- solo si cambió
-                    biography = currentState.biography,
-                    location = currentState.location,
-                    favoriteGenre = currentState.favoriteGenre,
-                    birthdate = currentState.birthdate,
-                    website = currentState.website,
-                    profileImageUrl = profileImageUrl       // <-- solo si hay nueva subida
-                )
-                    .onSuccess {
-                        // Recarga para reflejar cambios inmediatamente en la UI
-                        loadCurrentProfile()
-                        _uiState.value = _uiState.value.copy(
-                            isSaving = false,
-                            saveCompleted = true,
-                            successMessage = "Perfil actualizado exitosamente"
-                        )
-                    }
-                    .onFailure { e ->
-                        println("Error al actualizar perfil: ${e.message}")
-                        _uiState.value = _uiState.value.copy(
-                            isSaving = false,
-                            errorMessage = e.message ?: "Error al actualizar perfil"
-                        )
-                    }
+                try {
+                    authRepository.updateUserProfile(
+                        displayName = currentState.displayName,
+                        email = emailToUpdate,
+                        biography = currentState.biography,
+                        location = currentState.location,
+                        favoriteGenre = currentState.favoriteGenre,
+                        birthdate = currentState.birthdate,
+                        website = currentState.website,
+                        profileImageUrl = profileImageUrl
+                    )
+                    
+                    loadCurrentProfile()
+                    _uiState.value = _uiState.value.copy(
+                        isSaving = false,
+                        saveCompleted = true,
+                        successMessage = "Perfil actualizado exitosamente"
+                    )
+                } catch (e: Exception) {
+                    println("Error al actualizar perfil: ${e.message}")
+                    _uiState.value = _uiState.value.copy(
+                        isSaving = false,
+                        errorMessage = e.message ?: "Error al actualizar perfil"
+                    )
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isSaving = false,
