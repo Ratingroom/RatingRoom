@@ -52,6 +52,29 @@ class AuthRepository @Inject constructor(
         }.mapErrorAuth()
     }
 
+    suspend fun signInWithGoogle(idToken: String): Result<FirebaseUser> {
+        return try {
+            val user = authRemoteDataSource.signInWithGoogle(idToken)
+                ?: throw IllegalStateException("No se pudo iniciar sesión con Google.")
+            
+            // Verificar si es la primera vez que se registra (crear documento en Firestore)
+            val userExists = firestoreDataSource.getUserProfileById(user.uid) != null
+            if (!userExists) {
+                firestoreDataSource.createUserDocument(
+                    userId = user.uid,
+                    email = user.email ?: "",
+                    fullName = user.displayName,
+                    favoriteGenre = null,
+                    birthYear = null
+                )
+            }
+            
+            Result.success(user)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }.mapErrorAuth()
+    }
+
     suspend fun signUp(
         email: String,
         password: String,
@@ -130,13 +153,17 @@ class AuthRepository @Inject constructor(
                     profileImageUrl = profileData.profileImageUrl,
                     mainMovieId = profileData.mainMovieId,
                     createdAt = profileData.createdAt,
-                    updatedAt = profileData.updatedAt
+                    updatedAt = profileData.updatedAt,
+                    followersCount = profileData.followersCount,
+                    followingCount = profileData.followingCount
                 )
             } else {
                 UserProfile(
                     uid = user.uid,
                     email = user.email ?: "",
-                    fullName = user.displayName
+                    fullName = user.displayName,
+                    followersCount = 0,
+                    followingCount = 0
                 )
             }
             Result.success(profile)

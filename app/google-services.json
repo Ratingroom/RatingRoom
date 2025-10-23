@@ -12,7 +12,20 @@
           "package_name": "com.example.ratingroom"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "563247052682-u5gdbv10s2tqt4au0kjhsj170hd4ighm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.ratingroom",
+            "certificate_hash": "d7b70d59ae8898cc963ebc4b00337d6499d86ac4"
+          }
+        },
+        {
+          "client_id": "563247052682-a70t41edrvnh05kttca854qdiditauu7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDUxza5tlDMYlTjJEE3OnLf92ZcRpruLkA"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "563247052682-a70t41edrvnh05kttca854qdiditauu7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

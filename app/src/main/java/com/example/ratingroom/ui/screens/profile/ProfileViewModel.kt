@@ -47,12 +47,16 @@ class ProfileViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
             try {
+                println("ProfileViewModel: Iniciando carga de perfil")
                 val profileResult = authRepository.getUserProfile()
+                println("ProfileViewModel: Resultado de perfil: ${profileResult.isSuccess}")
+                
                 val uidHash = authRepository.currentUser?.uid?.hashCode() ?: 0
                 val reviewsResult = reviewRepository.listByUser(uidHash)
 
                 if (profileResult.isSuccess && reviewsResult.isSuccess) {
                     val userProfile = profileResult.getOrNull()!!
+                    println("ProfileViewModel: Perfil cargado - Name: ${userProfile.fullName}, Email: ${userProfile.email}")
                     val reviews = reviewsResult.getOrNull() ?: emptyList()
 
                     val memberSinceFormatted = userProfile.createdAt?.let { ts ->
@@ -79,6 +83,7 @@ class ProfileViewModel @Inject constructor(
                     )
 
                     val perfilVerificado = verificarIntegridadDatos(profileData)
+                    println("ProfileViewModel: ProfileData creado - ${perfilVerificado.name}")
 
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -90,12 +95,15 @@ class ProfileViewModel @Inject constructor(
                     observeFollowCounts()
                 } else {
                     val error = profileResult.exceptionOrNull() ?: reviewsResult.exceptionOrNull()
+                    println("ProfileViewModel: Error al cargar perfil: ${error?.message}")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = error?.message ?: "No se pudo cargar el perfil"
                     )
                 }
             } catch (e: Exception) {
+                println("ProfileViewModel: Excepción al cargar perfil: ${e.message}")
+                e.printStackTrace()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     errorMessage = e.message ?: "No se pudo cargar el perfil"

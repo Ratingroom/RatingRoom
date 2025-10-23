@@ -1,11 +1,14 @@
 package com.example.ratingroom.ui.screens.login
 
+import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -13,10 +16,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.ratingroom.R
 import com.example.ratingroom.ui.theme.*
 import com.example.ratingroom.ui.utils.*
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(
@@ -27,6 +36,8 @@ fun LoginScreen(
     viewModel: LoginViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     
     LoginScreenContent(
         uiState = uiState,
@@ -39,8 +50,53 @@ fun LoginScreen(
         },
         onRegisterClick = onRegisterClick,
         onForgotPasswordClick = onForgotPasswordClick,
+        onGoogleSignInClick = {
+            scope.launch {
+                signInWithGoogle(context) { idToken ->
+                    viewModel.signInWithGoogle(idToken) {
+                        onLoginClick(uiState.username, uiState.password)
+                    }
+                }
+            }
+        },
         modifier = modifier
     )
+}
+
+private suspend fun signInWithGoogle(
+    context: Context,
+    onSuccess: (String) -> Unit
+) {
+    try {
+        val credentialManager = CredentialManager.create(context)
+        
+        val googleIdOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(context.getString(R.string.web_client))
+            .build()
+
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(googleIdOption)
+            .build()
+
+        val result = credentialManager.getCredential(
+            request = request,
+            context = context
+        )
+
+        val credential = result.credential
+        if (credential is androidx.credentials.CustomCredential) {
+            if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                val idToken = googleIdTokenCredential.idToken
+                onSuccess(idToken)
+            }
+        }
+    } catch (e: GetCredentialException) {
+        println("Error en Google Sign-In: ${e.message}")
+    } catch (e: Exception) {
+        println("Error inesperado: ${e.message}")
+    }
 }
 
 @Composable
@@ -51,6 +107,7 @@ fun LoginScreenContent(
     onLoginClick: () -> Unit,
     onRegisterClick: () -> Unit,
     onForgotPasswordClick: () -> Unit,
+    onGoogleSignInClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
 
@@ -140,6 +197,38 @@ fun LoginScreenContent(
                     isLoading = uiState.isLoading
                 )
 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Divisor "o"
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    HorizontalDivider(
+                        modifier = Modifier.weight(1f),
+                        color = onSurfaceVariant.copy(alpha = 0.3f)
+                    )
+                    Text(
+                        text = stringResource(id = R.string.login_or),
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        fontSize = 14.sp,
+                        color = onSurfaceVariant
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.weight(1f),
+                        color = onSurfaceVariant.copy(alpha = 0.3f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Botón de Google Sign-In
+                GoogleSignInButton(
+                    onClick = onGoogleSignInClick,
+                    enabled = !uiState.isLoading
+                )
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Enlace de registro
@@ -178,6 +267,45 @@ fun LoginScreenContent(
     }
 }
 
+@Composable
+fun GoogleSignInButton(
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Icono de Google (usando el logo de Google desde los recursos)
+            Image(
+                painter = painterResource(id = R.drawable.ic_google),
+                contentDescription = "Google Logo",
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = stringResource(id = R.string.login_with_google),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun LoginScreenPreview() {
@@ -191,7 +319,8 @@ fun LoginScreenPreview() {
             onPasswordChange = {},
             onLoginClick = {},
             onRegisterClick = {},
-            onForgotPasswordClick = {}
+            onForgotPasswordClick = {},
+            onGoogleSignInClick = {}
         )
     }
 }

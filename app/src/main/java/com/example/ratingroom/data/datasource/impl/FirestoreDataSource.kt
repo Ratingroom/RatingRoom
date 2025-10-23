@@ -45,8 +45,8 @@ class FirestoreDataSourceImpl @Inject constructor(
             website = (data["website"] as? String) ?: "",
             profileImageUrl = data["profileImageUrl"] as? String,
             mainMovieId = (data["mainMovieId"] as? Number)?.toInt(),
-            followersCount = (data["followersCount"] as? Number)?.toInt(),
-            followingCount = (data["followingCount"] as? Number)?.toInt(),
+            followersCount = (data["followersCount"] as? Number)?.toInt() ?: 0,
+            followingCount = (data["followingCount"] as? Number)?.toInt() ?: 0,
             createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,
             updatedAt = (data["updatedAt"] as? Number)?.toLong() ?: 0L
         )
@@ -117,7 +117,9 @@ class FirestoreDataSourceImpl @Inject constructor(
         val data = mutableMapOf<String, Any>(
             "email" to email,
             "createdAt" to System.currentTimeMillis(),
-            "updatedAt" to System.currentTimeMillis()
+            "updatedAt" to System.currentTimeMillis(),
+            "followersCount" to 0,
+            "followingCount" to 0
         )
         fullName?.let { data["fullName"] = it }
         favoriteGenre?.let { data["favoriteGenre"] = it }

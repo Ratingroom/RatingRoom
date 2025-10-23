@@ -90,6 +90,33 @@ class LoginViewModel @Inject constructor(
         }
     }
 
+    fun signInWithGoogle(idToken: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+
+            println("LoginViewModel: Iniciando login con Google")
+            val result = authRepository.signInWithGoogle(idToken)
+
+            if (result.isSuccess) {
+                val user = result.getOrNull()
+                println("LoginViewModel: Login con Google exitoso para uid=${user?.uid}")
+                println("LoginViewModel: Email=${user?.email}, DisplayName=${user?.displayName}")
+                
+                fcmTokenManager.refreshFCMToken()
+                
+                _uiState.value = _uiState.value.copy(isLoading = false)
+                onSuccess()
+            } else {
+                val error = result.exceptionOrNull()
+                println("LoginViewModel: Login con Google falló - ${error?.message}")
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = error?.message ?: "Error al iniciar sesión con Google"
+                )
+            }
+        }
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }

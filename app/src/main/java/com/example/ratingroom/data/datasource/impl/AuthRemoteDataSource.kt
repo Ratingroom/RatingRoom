@@ -3,6 +3,7 @@ package com.example.ratingroom.data.datasource.impl
 import com.example.ratingroom.data.datasource.AuthRemoteDataSource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -38,6 +39,12 @@ class AuthRemoteDataSourceImpl @Inject constructor(
         
         println("AuthRemoteDataSource: Usuario creado exitosamente con UID: ${user?.uid}")
         return user
+    }
+
+    override suspend fun signInWithGoogle(idToken: String): FirebaseUser? {
+        val credential = GoogleAuthProvider.getCredential(idToken, null)
+        val result = authService.signInWithCredential(credential).await()
+        return result.user
     }
 
     override suspend fun sendPasswordResetEmail(email: String) {
