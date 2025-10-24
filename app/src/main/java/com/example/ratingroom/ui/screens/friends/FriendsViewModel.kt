@@ -29,59 +29,45 @@ class FriendsViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true)
 
             try {
-                val followingResult = friendsRepository.getFollowing()
-                val followersResult = friendsRepository.getFollowers()
-                val suggestionsResult = friendsRepository.getSuggestions()
+                val followingRaw = friendsRepository.getFollowing()
+                val followersRaw = friendsRepository.getFollowers()
+                val suggestionsRaw = friendsRepository.getSuggestions()
 
-                if (followingResult.isSuccess && followersResult.isSuccess && suggestionsResult.isSuccess) {
-                    val followingRaw = followingResult.getOrNull() ?: emptyList()
-                    val followersRaw = followersResult.getOrNull() ?: emptyList()
-                    val suggestionsRaw = suggestionsResult.getOrNull() ?: emptyList()
+                val followingUids = followingRaw.mapNotNull { it.uid }.toSet()
+                val followersUids = followersRaw.mapNotNull { it.uid }.toSet()
 
-                    val followingUids = followingRaw.mapNotNull { it.uid }.toSet()
-                    val followersUids = followersRaw.mapNotNull { it.uid }.toSet()
-
-                    val following = followingRaw.map { f ->
-                        val isMutual = followersUids.contains(f.uid)
-                        f.copy(
-                            relationshipType = if (isMutual) FriendshipType.MUTUAL else FriendshipType.FOLLOWING,
-                            isFollowing = true
-                        )
-                    }
-
-                    val followers = followersRaw.map { f ->
-                        val isMutual = followingUids.contains(f.uid)
-                        f.copy(
-                            relationshipType = if (isMutual) FriendshipType.MUTUAL else FriendshipType.FOLLOWER,
-                            isFollowing = isMutual
-                        )
-                    }
-
-                    val suggestions = suggestionsRaw
-                        .filter { it.uid !in followingUids && it.uid !in followersUids }
-                        .map { s ->
-                            s.copy(
-                                relationshipType = FriendshipType.NONE,
-                                isFollowing = false,
-                                isFriend = false
-                            )
-                        }
-
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        friends = following,
-                        suggestions = suggestions,
-                        followers = followers
-                    )
-                } else {
-                    val error = followingResult.exceptionOrNull() 
-                        ?: followersResult.exceptionOrNull() 
-                        ?: suggestionsResult.exceptionOrNull()
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = error?.message
+                val following = followingRaw.map { f ->
+                    val isMutual = followersUids.contains(f.uid)
+                    f.copy(
+                        relationshipType = if (isMutual) FriendshipType.MUTUAL else FriendshipType.FOLLOWING,
+                        isFollowing = true
                     )
                 }
+
+                val followers = followersRaw.map { f ->
+                    val isMutual = followingUids.contains(f.uid)
+                    f.copy(
+                        relationshipType = if (isMutual) FriendshipType.MUTUAL else FriendshipType.FOLLOWER,
+                        isFollowing = isMutual
+                    )
+                }
+
+                val suggestions = suggestionsRaw
+                    .filter { it.uid !in followingUids && it.uid !in followersUids }
+                    .map { s ->
+                        s.copy(
+                            relationshipType = FriendshipType.NONE,
+                            isFollowing = false,
+                            isFriend = false
+                        )
+                    }
+
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    friends = following,
+                    suggestions = suggestions,
+                    followers = followers
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

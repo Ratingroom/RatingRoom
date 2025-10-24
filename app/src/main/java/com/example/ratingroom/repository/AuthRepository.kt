@@ -42,24 +42,52 @@ class AuthRepository @Inject constructor(
 
     val currentUser: FirebaseUser? get() = authRemoteDataSource.currentUser
 
+    // ---------- Sign In ----------
     suspend fun signIn(email: String, password: String): Result<FirebaseUser> {
-        return try {
-            val user = authRemoteDataSource.signIn(email, password)
-                ?: throw IllegalStateException("No se pudo iniciar sesión.")
-            Result.success(user)
-        } catch (e: Exception) {
-            Result.failure(e)
+        return runCatching {
+            authRemoteDataSource.signIn(email, password)
+                ?: error("No se pudo iniciar sesión.")
         }.mapErrorAuth()
     }
 
+    // ---------- Sign Up ----------
+    suspend fun signUp(
+        email: String,
+        password: String,
+        displayName: String? = null,
+        favoriteGenre: String? = null,
+        birthYear: String? = null
+    ): Result<FirebaseUser> {
+        return runCatching {
+            // 1) Crear usuario en Auth
+            val user = authRemoteDataSource.signUp(
+                email = email,
+                password = password,
+                displayName = displayName
+            ) ?: error("No se pudo crear la cuenta.")
+
+            // 2) Crear documento en Firestore
+            firestoreDataSource.createUserDocument(
+                userId = user.uid,
+                email = email,
+                fullName = displayName,
+                favoriteGenre = favoriteGenre,
+                birthYear = birthYear
+            )
+
+            user
+        }.mapErrorAuth()
+    }
+
+    // ---------- Sign In with Google ----------
     suspend fun signInWithGoogle(idToken: String): Result<FirebaseUser> {
-        return try {
+        return runCatching {
             val user = authRemoteDataSource.signInWithGoogle(idToken)
-                ?: throw IllegalStateException("No se pudo iniciar sesión con Google.")
+                ?: error("No se pudo iniciar sesión con Google.")
             
-            // Verificar si es la primera vez que se registra (crear documento en Firestore)
-            val userExists = firestoreDataSource.getUserProfileById(user.uid) != null
-            if (!userExists) {
+            // Verificar si el usuario ya existe en Firestore, si no, crear documento
+            val existingProfile = firestoreDataSource.getUserProfileById(user.uid)
+            if (existingProfile == null) {
                 firestoreDataSource.createUserDocument(
                     userId = user.uid,
                     email = user.email ?: "",
@@ -69,44 +97,18 @@ class AuthRepository @Inject constructor(
                 )
             }
             
-            Result.success(user)
-        } catch (e: Exception) {
-            Result.failure(e)
+            user
         }.mapErrorAuth()
     }
 
-    suspend fun signUp(
-        email: String,
-        password: String,
-        displayName: String? = null,
-        favoriteGenre: String? = null,
-        birthYear: String? = null
-    ): Result<FirebaseUser> {
-        return try {
-            val user = authRemoteDataSource.signUp(
-                email = email,
-                password = password,
-                displayName = displayName
-            ) ?: throw IllegalStateException("No se pudo crear la cuenta.")
-
-            firestoreDataSource.createUserDocument(
-                userId = user.uid,
-                email = email,
-                fullName = displayName,
-                favoriteGenre = favoriteGenre,
-                birthYear = birthYear
-            )
-
-            Result.success(user)
-        } catch (e: Exception) {
-            Result.failure(e)
+    // ---------- Password Reset ----------
+    suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
+        return runCatching {
+            authRemoteDataSource.sendPasswordResetEmail(email)
         }.mapErrorAuth()
     }
 
-    suspend fun sendPasswordResetEmail(email: String) {
-        authRemoteDataSource.sendPasswordResetEmail(email)
-    }
-
+    // ---------- Update Profile (Auth + Firestore) ----------
     suspend fun updateUserProfile(
         displayName: String? = null,
         email: String? = null,
@@ -117,145 +119,157 @@ class AuthRepository @Inject constructor(
         website: String? = null,
         profileImageUrl: String? = null,
         mainMovieId: Int? = null
-    ) {
-        displayName?.let { authRemoteDataSource.updateDisplayName(it) }
-        email?.let { authRemoteDataSource.updateUserEmail(it) }
+    ): Result<Unit> {
+        return runCatching {
+            // Cambios en Firebase Auth
+            displayName?.let { authRemoteDataSource.updateDisplayName(it) }
+            email?.let { authRemoteDataSource.updateUserEmail(it) }
 
-        firestoreDataSource.updateUserProfile(
-            displayName = displayName,
-            email = email,
-            biography = biography,
-            location = location,
-            favoriteGenre = favoriteGenre,
-            birthdate = birthdate,
-            website = website,
-            profileImageUrl = profileImageUrl,
-            mainMovieId = mainMovieId
-        )
+            // Cambios en Firestore
+            firestoreDataSource.updateUserProfile(
+                displayName = displayName,
+                email = email,
+                biography = biography,
+                location = location,
+                favoriteGenre = favoriteGenre,
+                birthdate = birthdate,
+                website = website,
+                profileImageUrl = profileImageUrl,
+                mainMovieId = mainMovieId
+            )
+        }.mapErrorAuth()
     }
 
+    // ---------- Perfil: "Mi perfil" ----------
     suspend fun getUserProfile(): Result<UserProfile> {
-        return try {
-            val user = currentUser ?: throw IllegalStateException("No hay usuario autenticado.")
-            val profileData = firestoreDataSource.getUserProfileById(user.uid)
+        return runCatching {
+            val user = currentUser ?: error("No hay usuario autenticado.")
+            val profileData = firestoreDataSource.getUserProfile()
 
-            val profile = if (profileData != null) {
+            if (profileData != null) {
+                val profileImageUrl = profileData["profileImageUrl"] as? String
+                val mainMovieId = (profileData["mainMovieId"] as? Number)?.toInt()
                 UserProfile(
                     uid = user.uid,
                     email = user.email ?: "",
-                    fullName = profileData.fullName,
-                    favoriteGenre = profileData.favoriteGenre,
-                    birthYear = profileData.birthYear,
-                    biography = profileData.biography,
-                    location = profileData.location,
-                    birthdate = profileData.birthdate,
-                    website = profileData.website,
-                    profileImageUrl = profileData.profileImageUrl,
-                    mainMovieId = profileData.mainMovieId,
-                    createdAt = profileData.createdAt,
-                    updatedAt = profileData.updatedAt,
-                    followersCount = profileData.followersCount,
-                    followingCount = profileData.followingCount
+                    fullName = profileData["fullName"] as? String,
+                    favoriteGenre = profileData["favoriteGenre"] as? String,
+                    birthYear = profileData["birthYear"] as? String,
+                    biography = profileData["biography"] as? String,
+                    location = profileData["location"] as? String,
+                    birthdate = profileData["birthdate"] as? String,
+                    website = profileData["website"] as? String,
+                    profileImageUrl = profileImageUrl,
+                    mainMovieId = mainMovieId,
+                    createdAt = profileData["createdAt"] as? Long,
+                    updatedAt = profileData["updatedAt"] as? Long
                 )
             } else {
                 UserProfile(
                     uid = user.uid,
                     email = user.email ?: "",
-                    fullName = user.displayName,
-                    followersCount = 0,
-                    followingCount = 0
+                    fullName = user.displayName
                 )
             }
-            Result.success(profile)
-        } catch (e: Exception) {
-            Result.failure(e)
         }.mapErrorAuth()
     }
 
+    // ---------- Perfil: "Ver otro usuario" por ID ----------
     suspend fun getUserProfileById(userId: String): Result<UserProfile> {
-        return try {
+        return runCatching {
             val profileData = firestoreDataSource.getUserProfileById(userId)
-                ?: throw IllegalStateException("Usuario no encontrado.")
+                ?: error("Usuario no encontrado.")
 
-            val profile = UserProfile(
+            val email = profileData["email"] as? String ?: ""
+            val profileImageUrl = profileData["profileImageUrl"] as? String
+            val mainMovieId = (profileData["mainMovieId"] as? Number)?.toInt()
+
+            UserProfile(
                 uid = userId,
-                email = profileData.email ?: "",
-                fullName = profileData.fullName,
-                favoriteGenre = profileData.favoriteGenre,
-                birthYear = profileData.birthYear,
-                biography = profileData.biography,
-                location = profileData.location,
-                birthdate = profileData.birthdate,
-                website = profileData.website,
-                profileImageUrl = profileData.profileImageUrl,
-                mainMovieId = profileData.mainMovieId,
-                createdAt = profileData.createdAt,
-                updatedAt = profileData.updatedAt
+                email = email,
+                fullName = profileData["fullName"] as? String,
+                favoriteGenre = profileData["favoriteGenre"] as? String,
+                birthYear = profileData["birthYear"] as? String,
+                biography = profileData["biography"] as? String,
+                location = profileData["location"] as? String,
+                birthdate = profileData["birthdate"] as? String,
+                website = profileData["website"] as? String,
+                profileImageUrl = profileImageUrl,
+                mainMovieId = mainMovieId,
+                createdAt = profileData["createdAt"] as? Long,
+                updatedAt = profileData["updatedAt"] as? Long
             )
-            Result.success(profile)
-        } catch (e: Exception) {
-            Result.failure(e)
         }.mapErrorAuth()
     }
 
-    suspend fun followUser(targetUserId: String): Boolean {
-        return firestoreDataSource.followUser(targetUserId)
+    // ---------- Seguidores y Seguidos ----------
+    suspend fun followUser(targetUserId: String): Result<Boolean> {
+        return runCatching {
+            firestoreDataSource.followUser(targetUserId)
+        }.mapErrorAuth()
     }
     
-    suspend fun unfollowUser(targetUserId: String): Boolean {
-        return firestoreDataSource.unfollowUser(targetUserId)
+    suspend fun unfollowUser(targetUserId: String): Result<Boolean> {
+        return runCatching {
+            firestoreDataSource.unfollowUser(targetUserId)
+        }.mapErrorAuth()
     }
     
     suspend fun getFollowers(userId: String = ""): Result<List<UserProfile>> {
-        return try {
-            val uid = userId.ifEmpty { currentUser?.uid ?: throw IllegalStateException("No hay usuario autenticado.") }
+        return runCatching {
+            val uid = userId.ifEmpty { currentUser?.uid ?: error("No hay usuario autenticado.") }
             val followers = firestoreDataSource.getFollowers(uid)
             
-            val profiles = followers.map { profileData ->
+            followers.map { profileData ->
+                val uid = profileData["uid"] as? String ?: ""
+                val email = profileData["email"] as? String ?: ""
+                val profileImageUrl = profileData["profileImageUrl"] as? String
+                
                 UserProfile(
-                    uid = profileData.uid,
-                    email = profileData.email ?: "",
-                    fullName = profileData.fullName,
-                    favoriteGenre = profileData.favoriteGenre,
-                    biography = profileData.biography,
-                    location = profileData.location,
-                    profileImageUrl = profileData.profileImageUrl,
-                    followersCount = profileData.followersCount,
-                    followingCount = profileData.followingCount
+                    uid = uid,
+                    email = email,
+                    fullName = profileData["fullName"] as? String,
+                    favoriteGenre = profileData["favoriteGenre"] as? String,
+                    biography = profileData["biography"] as? String,
+                    location = profileData["location"] as? String,
+                    profileImageUrl = profileImageUrl,
+                    followersCount = (profileData["followersCount"] as? Number)?.toInt(),
+                    followingCount = (profileData["followingCount"] as? Number)?.toInt()
                 )
             }
-            Result.success(profiles)
-        } catch (e: Exception) {
-            Result.failure(e)
         }.mapErrorAuth()
     }
     
     suspend fun getFollowing(userId: String = ""): Result<List<UserProfile>> {
-        return try {
-            val uid = userId.ifEmpty { currentUser?.uid ?: throw IllegalStateException("No hay usuario autenticado.") }
+        return runCatching {
+            val uid = userId.ifEmpty { currentUser?.uid ?: error("No hay usuario autenticado.") }
             val following = firestoreDataSource.getFollowing(uid)
             
-            val profiles = following.map { profileData ->
+            following.map { profileData ->
+                val uid = profileData["uid"] as? String ?: ""
+                val email = profileData["email"] as? String ?: ""
+                val profileImageUrl = profileData["profileImageUrl"] as? String
+                
                 UserProfile(
-                    uid = profileData.uid,
-                    email = profileData.email ?: "",
-                    fullName = profileData.fullName,
-                    favoriteGenre = profileData.favoriteGenre,
-                    biography = profileData.biography,
-                    location = profileData.location,
-                    profileImageUrl = profileData.profileImageUrl,
-                    followersCount = profileData.followersCount,
-                    followingCount = profileData.followingCount
+                    uid = uid,
+                    email = email,
+                    fullName = profileData["fullName"] as? String,
+                    favoriteGenre = profileData["favoriteGenre"] as? String,
+                    biography = profileData["biography"] as? String,
+                    location = profileData["location"] as? String,
+                    profileImageUrl = profileImageUrl,
+                    followersCount = (profileData["followersCount"] as? Number)?.toInt(),
+                    followingCount = (profileData["followingCount"] as? Number)?.toInt()
                 )
             }
-            Result.success(profiles)
-        } catch (e: Exception) {
-            Result.failure(e)
         }.mapErrorAuth()
     }
 
+    // ---------- Utilidades ----------
     suspend fun signOut() {
+        // 🗑️ Limpiar token FCM antes de cerrar sesión
         fcmTokenManager.clearFCMToken()
+        
         authRemoteDataSource.signOut()
     }
 
@@ -264,6 +278,7 @@ class AuthRepository @Inject constructor(
     }
 }
 
+/** Mapeo de errores comunes de Firebase a mensajes legibles */
 private fun <T> Result<T>.mapErrorAuth(): Result<T> {
     return fold(
         onSuccess = { Result.success(it) },

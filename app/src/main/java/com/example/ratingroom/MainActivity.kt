@@ -1,37 +1,44 @@
 package com.example.ratingroom
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
-import androidx.navigation.compose.*
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.ratingroom.navigation.Screen
 import com.example.ratingroom.ui.screens.app.MainViewModel
 import com.example.ratingroom.ui.screens.favorites.FavoritesScreen
 import com.example.ratingroom.ui.screens.forgotpassword.ForgotPasswordScreen
-import com.example.ratingroom.ui.screens.friends.FriendRoute
 import com.example.ratingroom.ui.screens.friends.FriendsScreen
 import com.example.ratingroom.ui.screens.list.ListScreen
 import com.example.ratingroom.ui.screens.login.LoginScreen
 import com.example.ratingroom.ui.screens.main.MainMenuScreen
 import com.example.ratingroom.ui.screens.moviedetail.MovieDetailRoute
-import com.example.ratingroom.ui.screens.notifications.NotificationsRoute
-import com.example.ratingroom.ui.screens.profile.*
+import com.example.ratingroom.ui.screens.profile.EditProfileScreen
+import com.example.ratingroom.ui.screens.profile.ProfileScreen
+import com.example.ratingroom.ui.screens.profile.ProfileViewModel
+import com.example.ratingroom.ui.screens.friends.FriendRoute // ⬅️ NUEVO
+import com.example.ratingroom.ui.screens.profile.FollowersRoute
+import com.example.ratingroom.ui.screens.profile.FollowingRoute
 import com.example.ratingroom.ui.screens.register.RegisterScreen
 import com.example.ratingroom.ui.screens.reviews.ReviewsScreen
 import com.example.ratingroom.ui.screens.settings.SettingsScreen
@@ -40,69 +47,32 @@ import com.example.ratingroom.ui.theme.RatingRoomTheme
 import com.example.ratingroom.ui.utils.GradientBackground
 import com.example.ratingroom.ui.utils.ModernNavigationDrawer
 import com.example.ratingroom.ui.utils.ModernTopBar
-import com.example.ratingroom.utils.FCMTokenManager
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
-    @Inject
-    lateinit var fcmTokenManager: FCMTokenManager
-
-    // Launcher para pedir permiso de notificaciones (Android 13+)
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            // Permiso concedido, obtener token FCM
-            lifecycleScope.launch {
-                fcmTokenManager.refreshFCMToken()
-            }
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Estado de autenticación pasado desde SplashActivity
         val isUserLoggedIn = intent.getBooleanExtra(SplashActivity.EXTRA_IS_USER_LOGGED_IN, false)
-
-        // 🔔 Solicitar permiso de notificaciones y obtener token FCM
-        requestNotificationPermissionAndGetToken()
 
         setContent {
             RatingRoomTheme {
                 RatingRoomApp(isUserLoggedIn = isUserLoggedIn)
             }
         }
-    }
 
-    /**
-     * 🔔 Solicita permiso de notificaciones (Android 13+) y obtiene token FCM
-     */
-    private fun requestNotificationPermissionAndGetToken() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            when {
-                ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED -> {
-                    // Permiso ya concedido, obtener token
-                    lifecycleScope.launch {
-                        fcmTokenManager.refreshFCMToken()
-                    }
-                }
-                else -> {
-                    // Solicitar permiso
-                    requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
-            }
-        } else {
-            // Android 12 o menor, obtener token directamente
-            lifecycleScope.launch {
-                fcmTokenManager.refreshFCMToken()
+        // DEBUG: Ejecutar seeder de base de datos falsa si está disponible
+        if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            try {
+                val clazz = Class.forName("com.example.ratingroom.debug.FakeDbSeeder")
+                val method = clazz.getDeclaredMethod("run", com.google.firebase.firestore.FirebaseFirestore::class.java)
+                val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                method.invoke(null, firestore)
+            } catch (e: Exception) {
+                android.util.Log.w("MainActivity", "Seeder de debug no encontrado o falló: ${e.message}")
             }
         }
     }
@@ -115,15 +85,18 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    // VM principal
     val mainViewModel: MainViewModel = hiltViewModel()
     val mainUiState by mainViewModel.uiState.collectAsState()
 
+    // Datos del usuario para drawer/topbar
     val profileViewModel: ProfileViewModel = hiltViewModel()
     val profileUiState by profileViewModel.uiState.collectAsState()
 
+    // ✅ Estado de autenticación reactivo
     var currentAuthState by remember { mutableStateOf(isUserLoggedIn) }
 
-    // 🔄 Carga inicial de perfil si no está en pantallas de autenticación
+    // Recargar perfil al salir de pantallas de auth
     LaunchedEffect(currentRoute) {
         if (
             currentRoute != Screen.Login.route &&
@@ -177,6 +150,7 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                 contentWindowInsets = WindowInsets(0, 0, 0, 0)
             ) { innerPadding ->
 
+                // ✅ Iniciar según estado de autenticación actual
                 val startDestination = if (currentAuthState) {
                     Screen.MainMenu.route
                 } else {
@@ -192,9 +166,8 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                     composable(Screen.Login.route) {
                         LoginScreen(
                             onLoginClick = { _, _ ->
+                                // ✅ Actualizar estado de autenticación
                                 currentAuthState = true
-                                // 🔁 Recarga perfil al iniciar sesión
-                                profileViewModel.loadProfile()
                                 navController.navigate(Screen.MainMenu.route) {
                                     popUpTo(Screen.Login.route) { inclusive = true }
                                 }
@@ -203,20 +176,17 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                             onRegisterClick = { navigateToScreen(Screen.Register.route) }
                         )
                     }
-
                     composable(Screen.Register.route) {
                         RegisterScreen(
                             onRegisterClick = { _, _, _, _, _, _ ->
+                                // ✅ Actualizar estado de autenticación después del registro
                                 currentAuthState = true
-                                // 🔁 Recarga perfil después de registrarse
-                                profileViewModel.loadProfile()
                                 navigateBack()
                             },
                             onLoginClick = { navigateBack() },
                             onBackClick = { navigateBack() }
                         )
                     }
-
                     composable(Screen.ForgotPassword.route) {
                         ForgotPasswordScreen(
                             onSendRecoveryClick = { _ -> navigateBack() },
@@ -233,32 +203,26 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
 
                     composable(Screen.Profile.route) {
                         ProfileScreen(
-                            onBackClick = { },
+                            onBackClick = { /* handled by top bar global */ },
                             onEditClick = { navigateToScreen(Screen.EditProfile.route) },
                             onLogoutClick = {
                                 navController.navigate(Screen.Login.route) {
                                     popUpTo(0) { inclusive = true }
                                 }
-                                // 🔁 Limpia perfil al cerrar sesión
-                                profileViewModel.logout()
                             },
                             onNavigateToFollowers = { navigateToScreen(Screen.Followers.route) },
                             onNavigateToFollowing = { navigateToScreen(Screen.Following.route) }
                         )
                     }
 
-                    // ✅ Recarga perfil al guardar
                     composable(Screen.EditProfile.route) {
                         EditProfileScreen(
-                            onSave = {
-                                navigateBack()
-                                profileViewModel.loadProfile() // 🔁 Fuerza actualización en sidebar
-                            },
+                            onSave = { navigateBack() },
                             onBackClick = { navigateBack() }
                         )
                     }
 
-                    // ---------- FRIENDS ----------
+                    // Friends -> abre el perfil del usuario clickeado
                     composable(Screen.Friends.route) {
                         FriendsScreen(
                             onBack = navigateBack,
@@ -289,22 +253,14 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
 
                     composable(Screen.Settings.route) { SettingsScreen(onBack = navigateBack) }
 
-                    composable(Screen.Notifications.route) {
-                        NotificationsRoute(onBack = navigateBack)
-                    }
-
                     // ---------- DETALLE ----------
                     composable(
                         route = Screen.MovieDetail.route,
                         arguments = listOf(navArgument("movieId") { type = NavType.IntType })
                     ) { backStackEntry ->
                         val movieId = backStackEntry.arguments?.getInt("movieId") ?: 0
-                        MovieDetailRoute(
-                            movieId = movieId,
-                            onBack = navigateBack
-                        )
+                        MovieDetailRoute(movieId = movieId, onBack = navigateBack)
                     }
-
                     composable(
                         route = Screen.Synopsis.route,
                         arguments = listOf(navArgument("movieId") { type = NavType.IntType })
@@ -313,23 +269,23 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                         SynopsisScreen(movieId = movieId, onBackClick = navigateBack)
                     }
 
-                    // ---------- FRIEND ----------
+                    // ---------- FRIEND (perfil de otro usuario) ----------
                     composable(
-                        route = Screen.Friend.route,
+                        route = Screen.Friend.route, // "friend/{userId}"
                         arguments = listOf(navArgument("userId") { type = NavType.StringType })
                     ) { backStackEntry ->
                         val uid = backStackEntry.arguments?.getString("userId") ?: return@composable
                         FriendRoute(userId = uid, onBack = navigateBack)
                     }
-
-                    // ---------- FOLLOWERS / FOLLOWING ----------
+                    
+                    // ---------- SEGUIDORES Y SEGUIDOS ----------
                     composable(Screen.Followers.route) {
                         FollowersRoute(
                             onBack = navigateBack,
                             onUserClick = { userId -> navigateToScreen(Screen.Friend.createRoute(userId)) }
                         )
                     }
-
+                    
                     composable(Screen.Following.route) {
                         FollowingRoute(
                             onBack = navigateBack,
@@ -347,6 +303,7 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
                     onNavigate = { route -> navigateToScreen(route) },
                     onLogout = {
                         profileViewModel.logout()
+                        // ✅ Actualizar estado de autenticación
                         currentAuthState = false
                         navController.navigate(Screen.Login.route) {
                             popUpTo(0) { inclusive = true }
