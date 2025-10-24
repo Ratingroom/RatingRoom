@@ -16,16 +16,16 @@
       <SelectionState runConfigName="FirebaseUserDataSourceTest">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
-      <SelectionState runConfigName="sendOrDeleteLike_togglesLikeOnReview()">
+      <SelectionState runConfigName="sendOrDeleteLike_toggles_in10Iterations()">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
-      <SelectionState runConfigName="getReviewsByMovie_returnsInsertedOnes()">
+      <SelectionState runConfigName="getFollowing_returnsListForCurrentUser_in10Iterations()">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
-      <SelectionState runConfigName="getReviewsByUser_returnsInsertedOnes()">
+      <SelectionState runConfigName="sendOrDeleteLike_toggles()">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
-      <SelectionState runConfigName="getUserProfileById_returnsCorrectUser()">
+      <SelectionState runConfigName="UserRepositoryIntegrationTest">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
     </selectionStates>

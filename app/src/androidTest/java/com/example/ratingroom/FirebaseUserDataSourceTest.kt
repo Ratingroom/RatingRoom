@@ -106,7 +106,7 @@ class FirebaseUserDataSourceTest {
 
     /** 1) getUserProfileById: 10 usuarios únicos → get & assert en cada iteración */
     @Test
-    fun getUserProfileById_returnsCorrectUser_in10Iterations() {
+    fun getUserProfileById_returnsCorrectUser() {
         runBlocking {
             repeat(10) { i ->
                 val uid = uniqueId("user_get")
@@ -120,7 +120,7 @@ class FirebaseUserDataSourceTest {
 
     /** 2) getAllUsers: consultar 10 veces; siempre debe ser >= 10 (por el seed) */
     @Test
-    fun getAllUsers_returnsAtLeast10_in10Iterations() {
+    fun getAllUsers_returnsAtLeast10() {
         runBlocking {
             repeat(10) {
                 val all = dataSource.getAllUsers()
@@ -131,7 +131,7 @@ class FirebaseUserDataSourceTest {
 
     /** 3) followUser: 10 targets nuevos; actor debe quedar en followers en cada uno */
     @Test
-    fun followUser_addsCurrentToTargetsFollowers_in10Iterations() {
+    fun followUser_addsCurrentToTargetsFollowers() {
         runBlocking {
             repeat(10) {
                 val targetId = uniqueId("targetFollow")
@@ -148,7 +148,7 @@ class FirebaseUserDataSourceTest {
 
     /** 4) unfollowUser: 10 targets → follow + unfollow y comprobar que se elimine */
     @Test
-    fun unfollowUser_removesCurrentFromTargetsFollowers_in10Iterations() {
+    fun unfollowUser_removesCurrentFromTargetsFollowers() {
         runBlocking {
             repeat(10) {
                 val targetId = uniqueId("targetUnfollow")
@@ -166,7 +166,7 @@ class FirebaseUserDataSourceTest {
 
     /** 5) createReviewFanout: 10 reseñas (owners únicos) deben existir en colección plana */
     @Test
-    fun createReviewFanout_createsReviewDocument_in10Iterations() {
+    fun createReviewFanout_createsReviewDocument() {
         runBlocking {
             repeat(10) {
                 val owner = uniqueId("reviewOwner")
@@ -183,7 +183,7 @@ class FirebaseUserDataSourceTest {
 
     /** 6) getReviewsByMovie: 10 películas únicas con 5 reseñas c/u → validar tamaño */
     @Test
-    fun getReviewsByMovie_returnsInsertedOnes_in10Iterations() {
+    fun getReviewsByMovie_returnsInsertedOnes() {
         runBlocking {
             repeat(10) {
                 val movieId = (1000..9999).random()
@@ -201,7 +201,7 @@ class FirebaseUserDataSourceTest {
 
     /** 7) getReviewsByUser: 10 users distintos con 3 reseñas c/u → validar tamaño */
     @Test
-    fun getReviewsByUser_returnsInsertedOnes_in10Iterations() {
+    fun getReviewsByUser_returnsInsertedOnes() {
         runBlocking {
             repeat(10) {
                 val userId = uniqueId("userReviews")
@@ -217,7 +217,7 @@ class FirebaseUserDataSourceTest {
 
     /** 8) sendOrDeleteLike: 10 reseñas → like (true) y unlike (false) en cada una */
     @Test
-    fun sendOrDeleteLike_togglesLikeOnReview_in10Iterations() {
+    fun sendOrDeleteLike_togglesLikeOnReview() {
         runBlocking {
             repeat(10) {
                 val owner = uniqueId("likeOwner")
