@@ -15,6 +15,21 @@ class MovieFirebaseRepository @Inject constructor(
     private val TAG = "MovieFirebaseRepo"
 
     // ---------- Mappers Firebase -> Modelo ----------
+    private fun mapFromFirestoreData(data: Map<String, Any>): MovieDto {
+        return MovieDto(
+            id = (data["id"] as? Number)?.toInt() ?: 0,
+            title = data["title"] as? String ?: data["titulo"] as? String ?: "",
+            year = data["year"] as? String ?: data["fechaSalida"] as? String ?: "",
+            genre = data["genre"] as? String ?: data["subcategoria"] as? String ?: "",
+            rating = (data["rating"] as? Number)?.toDouble() ?: (data["averageRating"] as? Number)?.toDouble() ?: 0.0,
+            reviews = (data["reviews"] as? Number)?.toInt() ?: (data["totalReviews"] as? Number)?.toInt() ?: 0,
+            description = data["description"] as? String ?: data["descripcion"] as? String ?: "",
+            director = data["director"] as? String ?: "",
+            duration = data["duration"] as? String ?: "",
+            imageUrl = data["imageUrl"] as? String ?: data["portada"] as? String
+        )
+    }
+
     private fun mapMovieFromFirestore(data: MovieDto): Movie {
         return Movie(
             id = data.id,
@@ -38,8 +53,9 @@ class MovieFirebaseRepository @Inject constructor(
             
             val mappedMovies = firestoreMovies.mapNotNull { data ->
                 try {
-                    Log.d(TAG, "🔥 Mapeando película: ${data.title}")
-                    mapMovieFromFirestore(data)
+                    val movieDto = mapFromFirestoreData(data)
+                    Log.d(TAG, "🔥 Mapeando película: ${movieDto.title}")
+                    mapMovieFromFirestore(movieDto)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error mapeando película desde Firebase: ${e.message}", e)
                     null
@@ -57,7 +73,8 @@ class MovieFirebaseRepository @Inject constructor(
             val firestoreMovie = firestoreDataSource.getMovieById(id)
             val movie = firestoreMovie?.let { data ->
                 try {
-                    mapMovieFromFirestore(data)
+                    val movieDto = mapFromFirestoreData(data)
+                    mapMovieFromFirestore(movieDto)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error mapeando película $id desde Firebase: ${e.message}", e)
                     null
@@ -74,7 +91,8 @@ class MovieFirebaseRepository @Inject constructor(
             val firestoreMovies = firestoreDataSource.getMoviesByGenre(genre)
             val movies = firestoreMovies.mapNotNull { data ->
                 try {
-                    mapMovieFromFirestore(data)
+                    val movieDto = mapFromFirestoreData(data)
+                    mapMovieFromFirestore(movieDto)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error mapeando película desde Firebase: ${e.message}", e)
                     null
@@ -91,7 +109,8 @@ class MovieFirebaseRepository @Inject constructor(
             val firestoreMovies = firestoreDataSource.searchMovies(query)
             val movies = firestoreMovies.mapNotNull { data ->
                 try {
-                    mapMovieFromFirestore(data)
+                    val movieDto = mapFromFirestoreData(data)
+                    mapMovieFromFirestore(movieDto)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error mapeando película desde Firebase: ${e.message}", e)
                     null

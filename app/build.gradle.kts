@@ -99,8 +99,11 @@ dependencies {
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-messaging")
 
+    // Credentials & Google Sign-in
     implementation("androidx.credentials:credentials:1.6.0-beta03")
     implementation("androidx.credentials:credentials-play-services-auth:1.6.0-beta03")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.0")
 
+    // Faker para datos de prueba (solo debug)
+    debugImplementation("io.github.serpro69:kotlin-faker:1.14.0")
 }
