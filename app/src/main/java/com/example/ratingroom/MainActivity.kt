@@ -64,16 +64,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // DEBUG: Ejecutar seeder de base de datos falsa si está disponible
-        if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+        // DEBUG: Ejecutar seeder de base de datos falsa SOLO si está habilitado en BuildConfig
+        if (BuildConfig.ENABLE_TEST_DATA_SEEDER && BuildConfig.DEBUG) {
             try {
                 val clazz = Class.forName("com.example.ratingroom.debug.FakeDbSeeder")
                 val method = clazz.getDeclaredMethod("run", com.google.firebase.firestore.FirebaseFirestore::class.java)
                 val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
                 method.invoke(null, firestore)
+                android.util.Log.i("MainActivity", "✅ Seeder de datos de prueba ejecutado")
             } catch (e: Exception) {
-                android.util.Log.w("MainActivity", "Seeder de debug no encontrado o falló: ${e.message}")
+                android.util.Log.w("MainActivity", "⚠️ Seeder de debug no encontrado o falló: ${e.message}")
             }
+        } else {
+            android.util.Log.d("MainActivity", "ℹ️ Seeder de datos deshabilitado (ENABLE_TEST_DATA_SEEDER=${BuildConfig.ENABLE_TEST_DATA_SEEDER})")
         }
     }
 }

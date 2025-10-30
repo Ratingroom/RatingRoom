@@ -27,6 +27,8 @@ android {
     buildTypes {
         debug {
             isDebuggable = true
+            // Variable para controlar el seeder de datos de prueba
+            buildConfigField("boolean", "ENABLE_TEST_DATA_SEEDER", "false") //cambiar a true si se quiere el seeder
         }
         release {
             isMinifyEnabled = true
@@ -35,6 +37,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            buildConfigField("boolean", "ENABLE_TEST_DATA_SEEDER", "false")
         }
     }
 
@@ -115,6 +118,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.navigation:navigation-compose:2.7.5")
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // Paging 3 para paginación
+    implementation("androidx.paging:paging-runtime-ktx:3.3.5")
+    implementation("androidx.paging:paging-compose:3.3.5")
 
     // Splash Screen API
     implementation("androidx.core:core-splashscreen:1.0.1")

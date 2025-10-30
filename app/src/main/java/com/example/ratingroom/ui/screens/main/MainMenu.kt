@@ -3,8 +3,13 @@ package com.example.ratingroom.ui.screens.main
 import com.example.ratingroom.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,6 +38,8 @@ fun MainMenuScreen(
         onGenreSelected = viewModel::onGenreSelected,
         onFilterExpandedChange = viewModel::onFilterExpandedChange,
         onMovieClick = onMovieClick,
+        onNextPage = viewModel::nextPage,
+        onPreviousPage = viewModel::previousPage,
         modifier = modifier
     )
 }
@@ -44,6 +51,8 @@ fun MainMenuScreenContent(
     onGenreSelected: (String) -> Unit,
     onFilterExpandedChange: (Boolean) -> Unit,
     onMovieClick: (Int) -> Unit,
+    onNextPage: () -> Unit,
+    onPreviousPage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
@@ -74,12 +83,27 @@ fun MainMenuScreenContent(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                stringResource(id = R.string.main_menu_popular_movies),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = cs.tertiary
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    stringResource(id = R.string.main_menu_popular_movies),
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = cs.tertiary
+                )
+                
+                // Indicador de página
+                if (uiState.usePagination) {
+                    Text(
+                        text = "Página ${uiState.currentPage + 1}",
+                        fontSize = 14.sp,
+                        color = cs.onBackground.copy(alpha = 0.7f)
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -114,16 +138,54 @@ fun MainMenuScreenContent(
                             Text("No hay películas para mostrar", color = cs.onBackground)
                         }
                     } else {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.fillMaxHeight()
-                        ) {
-                            items(uiState.filteredMovies) { movie ->
-                                MovieCard(
-                                    movie = movie,
-                                    onClick = { onMovieClick(movie.id) }
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Grid de películas con estado de scroll
+                            val gridState = rememberLazyGridState()
+                            
+                            // Detectar si el usuario ha hecho scroll
+                            val isScrolled by remember {
+                                derivedStateOf {
+                                    gridState.firstVisibleItemIndex > 0 || 
+                                    gridState.firstVisibleItemScrollOffset > 0
+                                }
+                            }
+                            
+                            // Detectar si está cerca del final (últimos 2 items visibles)
+                            val isNearEnd by remember {
+                                derivedStateOf {
+                                    val layoutInfo = gridState.layoutInfo
+                                    val totalItems = layoutInfo.totalItemsCount
+                                    val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                                    totalItems > 0 && lastVisibleItem >= totalItems - 2  // 🎯 Cambiado de 3 a 5
+                                }
+                            }
+                            
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                state = gridState,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                items(uiState.filteredMovies) { movie ->
+                                    MovieCard(
+                                        movie = movie,
+                                        onClick = { onMovieClick(movie.id) }
+                                    )
+                                }
+                            }
+                            
+                            // Controles de paginación - Solo mostrar cuando el usuario ha hecho scroll
+                            // y está cerca del final O hay más de una página disponible
+                            if (uiState.usePagination && (isNearEnd || uiState.currentPage > 0)) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                
+                                PaginationControls(
+                                    currentPage = uiState.currentPage,
+                                    hasMorePages = uiState.hasMorePages,
+                                    onPreviousPage = onPreviousPage,
+                                    onNextPage = onNextPage,
+                                    isLoading = uiState.isLoading
                                 )
                             }
                         }
@@ -178,7 +240,69 @@ fun PreviewMainMenuScreen() {
             onSearchQueryChange = {},
             onGenreSelected = {},
             onFilterExpandedChange = {},
-            onMovieClick = {}
+            onMovieClick = {},
+            onNextPage = {},
+            onPreviousPage = {}
         )
+    }
+}
+
+@Composable
+fun PaginationControls(
+    currentPage: Int,
+    hasMorePages: Boolean,
+    onPreviousPage: () -> Unit,
+    onNextPage: () -> Unit,
+    isLoading: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val cs = MaterialTheme.colorScheme
+    
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Botón Anterior
+        Button(
+            onClick = onPreviousPage,
+            enabled = currentPage > 0 && !isLoading,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = cs.primary,
+                disabledContainerColor = cs.surfaceVariant
+            ),
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                imageVector = Icons.Default.ArrowBack,
+                contentDescription = "Página anterior",
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Anterior")
+        }
+        
+        Spacer(modifier = Modifier.width(16.dp))
+        
+        // Botón Siguiente
+        Button(
+            onClick = onNextPage,
+            enabled = hasMorePages && !isLoading,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = cs.primary,
+                disabledContainerColor = cs.surfaceVariant
+            ),
+            modifier = Modifier.weight(1f)
+        ) {
+            Text("Siguiente")
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = Icons.Default.ArrowForward,
+                contentDescription = "Página siguiente",
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }

@@ -1,9 +1,12 @@
 package com.example.ratingroom.ui.screens.main
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ratingroom.data.models.Movie
 import com.example.ratingroom.repository.MovieRepository
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.async
@@ -11,12 +14,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @HiltViewModel
 class MainMenuViewModel @Inject constructor(
-    private val movieRepository: MovieRepository
+    private val movieRepository: MovieRepository,
+    private val firestore: FirebaseFirestore
 ) : ViewModel() {
 
+    private val TAG = "MainMenuViewModel"
+    
     private val _uiState = MutableStateFlow(
         MainMenuUIState(
             isLoading = true,
@@ -26,35 +33,105 @@ class MainMenuViewModel @Inject constructor(
             searchQuery = "",
             selectedGenre = "Todos",
             filterExpanded = false,
-            errorMessage = null
+            errorMessage = null,
+            usePagination = true,
+            currentPage = 0,
+            hasMorePages = true,
+            pageSize = 6
         )
     )
     val uiState: StateFlow<MainMenuUIState> = _uiState.asStateFlow()
+    
+    // Cursores para paginación de Firestore
+    private var lastDocument: DocumentSnapshot? = null
+    private var firstDocument: DocumentSnapshot? = null
+    private val pageHistory = mutableListOf<DocumentSnapshot?>() // Historial de primeros docs de cada página
 
     init {
-        loadMovies()
+        loadGenres()
+        loadMoviesPage()
     }
 
-    /** Carga inicial (películas + géneros) */
-    fun loadMovies() {
+    /** Carga los géneros disponibles */
+    private fun loadGenres() {
+        viewModelScope.launch {
+            try {
+                val genres = movieRepository.getGenres().ifEmpty { listOf("Todos") }
+                _uiState.value = _uiState.value.copy(genres = genres)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error cargando géneros: ${e.message}", e)
+            }
+        }
+    }
+
+    /** Carga una página de películas con paginación de Firestore */
+    fun loadMoviesPage(startAfter: DocumentSnapshot? = null) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             try {
-                // Cargar en paralelo
-                val moviesDefer = async { movieRepository.getAllMovies() }
-                val genresDefer = async { movieRepository.getGenres() }
-
-                val movies = moviesDefer.await()
-                val genres = genresDefer.await().ifEmpty { listOf("Todos") }
-
+                val state = _uiState.value
+                var query = firestore.collection("movies")
+                    .orderBy("title")
+                
+                // Aplicar filtro de género si no es "Todos"
+                if (state.selectedGenre != "Todos") {
+                    query = query.whereEqualTo("genre", state.selectedGenre)
+                }
+                
+                // Aplicar paginación
+                query = query.limit(state.pageSize.toLong())
+                
+                // Si hay un cursor, empezar después de él
+                startAfter?.let {
+                    query = query.startAfter(it)
+                }
+                
+                // Ejecutar query
+                val querySnapshot = query.get().await()
+                Log.d(TAG, "📦 Recibidos ${querySnapshot.documents.size} documentos")
+                
+                // Mapear documentos a películas
+                val movies = querySnapshot.documents.mapNotNull { doc ->
+                    try {
+                        mapDocumentToMovie(doc)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error mapeando documento ${doc.id}: ${e.message}", e)
+                        null
+                    }
+                }
+                
+                // Aplicar filtro de búsqueda en memoria si existe
+                val filteredMovies = if (state.searchQuery.isNotBlank()) {
+                    movies.filter { movie ->
+                        movie.title.contains(state.searchQuery, ignoreCase = true) ||
+                        movie.description.contains(state.searchQuery, ignoreCase = true) ||
+                        movie.genre.contains(state.searchQuery, ignoreCase = true)
+                    }
+                } else {
+                    movies
+                }
+                
+                // Actualizar cursores
+                if (querySnapshot.documents.isNotEmpty()) {
+                    firstDocument = querySnapshot.documents.firstOrNull()
+                    lastDocument = querySnapshot.documents.lastOrNull()
+                }
+                
+                // Determinar si hay más páginas
+                val hasMore = querySnapshot.documents.size >= state.pageSize
+                
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    movies = movies,
-                    filteredMovies = movies,   // 💡 mostrar todo al inicio
-                    genres = genres,
-                    errorMessage = if (movies.isEmpty()) "No hay películas disponibles" else null
+                    movies = filteredMovies,
+                    filteredMovies = filteredMovies,
+                    hasMorePages = hasMore,
+                    errorMessage = if (filteredMovies.isEmpty()) "No hay películas disponibles" else null
                 )
+                
+                Log.d(TAG, "✅ Cargadas ${filteredMovies.size} películas, hay más: $hasMore")
+                
             } catch (e: Exception) {
+                Log.e(TAG, "❌ Error cargando películas: ${e.message}", e)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     errorMessage = e.message ?: "Error cargando películas"
@@ -62,45 +139,103 @@ class MainMenuViewModel @Inject constructor(
             }
         }
     }
+    
+    /** Navegar a la siguiente página */
+    fun nextPage() {
+        val state = _uiState.value
+        if (state.hasMorePages && !state.isLoading) {
+            // Guardar el primer documento de la página actual en el historial
+            pageHistory.add(firstDocument)
+            
+            _uiState.value = state.copy(currentPage = state.currentPage + 1)
+            loadMoviesPage(startAfter = lastDocument)
+        }
+    }
+    
+    /** Navegar a la página anterior */
+    fun previousPage() {
+        val state = _uiState.value
+        if (state.currentPage > 0 && !state.isLoading) {
+            // Retroceder una página usando el historial
+            val newPage = state.currentPage - 1
+            
+            if (newPage == 0) {
+                // Volver a la primera página
+                pageHistory.clear()
+                lastDocument = null
+                firstDocument = null
+                _uiState.value = state.copy(currentPage = 0)
+                loadMoviesPage()
+            } else {
+                // Cargar desde el documento guardado
+                val startDoc = if (pageHistory.size > newPage) {
+                    pageHistory[newPage]
+                } else {
+                    null
+                }
+                
+                // Eliminar páginas posteriores del historial
+                while (pageHistory.size > newPage) {
+                    pageHistory.removeAt(pageHistory.size - 1)
+                }
+                
+                _uiState.value = state.copy(currentPage = newPage)
+                loadMoviesPage(startAfter = startDoc)
+            }
+        }
+    }
 
     fun onSearchQueryChange(query: String) {
-        _uiState.value = _uiState.value.copy(searchQuery = query)
-        applyFilters()
+        _uiState.value = _uiState.value.copy(searchQuery = query, currentPage = 0)
+        // Reiniciar paginación con búsqueda
+        pageHistory.clear()
+        lastDocument = null
+        firstDocument = null
+        loadMoviesPage()
     }
 
     fun onGenreSelected(genre: String) {
         _uiState.value = _uiState.value.copy(
             selectedGenre = genre,
-            filterExpanded = false
+            filterExpanded = false,
+            currentPage = 0
         )
-        applyFilters()
+        // Reiniciar paginación con nuevo género
+        pageHistory.clear()
+        lastDocument = null
+        firstDocument = null
+        loadMoviesPage()
     }
 
     fun onFilterExpandedChange(expanded: Boolean) {
         _uiState.value = _uiState.value.copy(filterExpanded = expanded)
     }
 
-    /** Aplica búsqueda + filtro por género sobre la lista ya cargada */
-    private fun applyFilters() {
-        val state = _uiState.value
-        val query = state.searchQuery.trim()
-        val genre = state.selectedGenre
-
-        val filtered = state.movies.filter { movie ->
-            val matchesQuery = query.isEmpty() ||
-                    movie.title.contains(query, ignoreCase = true) ||
-                    movie.genre.contains(query, ignoreCase = true)
-
-            val matchesGenre = genre == "Todos" || movie.genre.equals(genre, ignoreCase = true)
-            matchesQuery && matchesGenre
-        }
-
-        _uiState.value = state.copy(
-            filteredMovies = filtered,
-            errorMessage = if (!state.isLoading && filtered.isEmpty()) "No hay resultados" else null
+    /** Por si quieres recargar desde UI */
+    fun refresh() {
+        _uiState.value = _uiState.value.copy(currentPage = 0)
+        pageHistory.clear()
+        lastDocument = null
+        firstDocument = null
+        loadMoviesPage()
+    }
+    
+    private fun mapDocumentToMovie(doc: DocumentSnapshot): Movie {
+        val data = doc.data ?: throw IllegalStateException("Documento sin datos")
+        
+        return Movie(
+            id = (data["id"] as? Number)?.toInt() ?: doc.id.toIntOrNull() ?: 0,
+            title = data["title"] as? String ?: data["titulo"] as? String ?: "",
+            year = data["year"] as? String ?: data["fechaSalida"] as? String ?: "",
+            genre = data["genre"] as? String ?: data["subcategoria"] as? String ?: "",
+            rating = (data["rating"] as? Number)?.toDouble() 
+                ?: (data["averageRating"] as? Number)?.toDouble() ?: 0.0,
+            reviews = (data["reviews"] as? Number)?.toInt() 
+                ?: (data["totalReviews"] as? Number)?.toInt() ?: 0,
+            description = data["description"] as? String ?: data["descripcion"] as? String ?: "",
+            director = data["director"] as? String ?: "",
+            duration = data["duration"] as? String ?: "",
+            imageUrl = data["imageUrl"] as? String ?: data["portada"] as? String
         )
     }
-
-    /** Por si quieres recargar desde UI */
-    fun refresh() = loadMovies()
 }
