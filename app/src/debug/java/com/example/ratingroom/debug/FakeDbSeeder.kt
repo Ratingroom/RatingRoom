@@ -4,12 +4,16 @@ import android.util.Log
 import io.github.serpro69.kfaker.Faker
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.database.FirebaseDatabase
+import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import kotlin.random.Random
+
+// Eliminado: val io: Any  // causaba conflicto con el paquete `io` en los imports
 
 /**
  * Seeder de base de datos falsa para entorno DEBUG.
@@ -50,6 +54,14 @@ object FakeDbSeeder {
             null
         }
 
+        // Payload para Realtime Database y export JSON
+        val rtdbPayload = mutableMapOf<String, Any>()
+        val rtdbUsers = mutableMapOf<String, Map<String, Any>>()
+        val rtdbFollowers = mutableMapOf<String, MutableMap<String, Boolean>>()
+        val rtdbFollowing = mutableMapOf<String, MutableMap<String, Boolean>>()
+        val rtdbReviews = mutableMapOf<String, Map<String, Any>>()
+        val rtdbMovies = mutableMapOf<String, Map<String, Any>>()
+
         // 1) Usuarios
         val userIds = mutableListOf<String>()
         val usersData = mutableMapOf<String, Map<String, Any>>()
@@ -60,19 +72,21 @@ object FakeDbSeeder {
             val fullName = faker?.name?.name() ?: "${fakerLikeFirst()} ${fakerLikeLast()}"
             val email = faker?.internet?.email() ?: "${fullName.lowercase().replace(" ", ".")}@mail.com"
             val favorite = genres.random()
+            val now = System.currentTimeMillis()
             val data = mapOf(
                 "email" to email,
                 "fullName" to fullName,
                 "favoriteGenre" to favorite,
-                "createdAt" to System.currentTimeMillis(),
-                "updatedAt" to System.currentTimeMillis(),
+                "createdAt" to now,
+                "updatedAt" to now,
                 "followersCount" to 0,
                 "followingCount" to 0
             )
             usersData[uid] = data
+            rtdbUsers[uid] = data
         }
 
-        // Escribir usuarios
+        // Escribir usuarios a Firestore
         for ((uid, data) in usersData) {
             firestore.collection("users").document(uid).set(data).await()
         }
@@ -103,8 +117,14 @@ object FakeDbSeeder {
                 .await()
             followingCount[viewer] = (followingCount[viewer] ?: 0) + 1
             followersCount[target] = (followersCount[target] ?: 0) + 1
+
+            // RTDB mirrors
+            val fMap = rtdbFollowers.getOrPut(target) { mutableMapOf() }
+            fMap[viewer] = true
+            val gMap = rtdbFollowing.getOrPut(viewer) { mutableMapOf() }
+            gMap[target] = true
         }
-        // Persistir contadores
+        // Persistir contadores en Firestore
         for (uid in userIds) {
             firestore.collection("users").document(uid)
                 .update(
@@ -123,9 +143,9 @@ object FakeDbSeeder {
                 val movieId = moviePool.random()
                 val rating = Random.nextInt(1, 6)
                 val words = faker?.lorem?.words() ?: "Muy buena película"
-                 val text = "$words (${rating}/5)"
-                 // fanout
-                 val reviewData = mapOf(
+                val text = "$words (${rating}/5)"
+                // fanout Firestore
+                val reviewData = mapOf(
                     "userId" to uid,
                     "movieId" to movieId,
                     "rating" to rating,
@@ -138,13 +158,48 @@ object FakeDbSeeder {
                     .collection("reviews").document(reviewDoc.id)
                     .set(reviewData).await()
 
+                val movieUpdate = mapOf("updatedAt" to FieldValue.serverTimestamp())
                 firestore.collection("movies").document(movieId.toString())
-                    .set(mapOf("updatedAt" to FieldValue.serverTimestamp()), com.google.firebase.firestore.SetOptions.merge())
+                    .set(movieUpdate, com.google.firebase.firestore.SetOptions.merge())
                     .await()
                 firestore.collection("movies").document(movieId.toString())
                     .collection("reviews").document(reviewDoc.id)
                     .set(reviewData).await()
+
+                // RTDB mirrors
+                val rReview = mapOf(
+                    "id" to reviewDoc.id,
+                    "userId" to uid,
+                    "movieId" to movieId,
+                    "rating" to rating,
+                    "text" to text,
+                    "createdAt" to System.currentTimeMillis()
+                )
+                rtdbReviews[reviewDoc.id] = rReview
+                rtdbMovies[movieId.toString()] = mapOf("updatedAt" to System.currentTimeMillis())
             }
+        }
+
+        // Construir payload RTDB
+        rtdbPayload["users"] = rtdbUsers
+        rtdbPayload["followers"] = rtdbFollowers
+        rtdbPayload["following"] = rtdbFollowing
+        rtdbPayload["reviews"] = rtdbReviews
+        rtdbPayload["movies"] = rtdbMovies
+
+        // Subir a Realtime Database (rama /seed/debug_v1)
+        try {
+            val db = FirebaseDatabase.getInstance()
+            db.reference.child("seed").child("debug_v1").setValue(rtdbPayload).await()
+            Log.i("FakeDbSeeder", "RTDB seed subido en /seed/debug_v1")
+        } catch (e: Exception) {
+            Log.w("FakeDbSeeder", "No se pudo subir a RTDB: ${e.message}")
+        }
+
+        // Export JSON (para Firebase CLI database:set)
+        val json = try { Gson().toJson(rtdbPayload) } catch (e: Exception) { null }
+        json?.let {
+            Log.i("FakeDbSeeder", "RTDB JSON export (cópialo a un archivo si lo necesitas):\n$it")
         }
     }
 

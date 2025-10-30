@@ -163,4 +163,6 @@ dependencies {
 
     // Para UI / instrumented tests (androidTest/)
     androidTestImplementation("io.mockk:mockk-android:1.13.14")
+    // Realtime Database para el seeder (solo debug)
+    debugImplementation("com.google.firebase:firebase-database-ktx")
 }

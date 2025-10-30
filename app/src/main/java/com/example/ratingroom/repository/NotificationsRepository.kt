@@ -12,21 +12,32 @@ class NotificationsRepository @Inject constructor(
     private val ds: FirestoreDataSource,
     private val authRepository: AuthRepository
 ) {
-    fun observeMyNotifications(): Flow<List<NotificationDto>> {
+    fun observeMyNotifications(): Flow<List<com.example.ratingroom.data.dtos.NotificationDto>> {
         val uid = authRepository.currentUser?.uid ?: ""
         return ds.observeNotifications(uid).map { list ->
-            list.map { mapNotificationFromFirestore(it) }
+            list.map { m ->
+                NotificationDto(
+                    id = (m["id"] as? String) ?: "",
+                    type = (m["type"] as? String) ?: "",
+                    actorUserId = (m["actorUserId"] as? String) ?: "",
+                    actorName = m["actorName"] as? String,
+                    reviewId = m["reviewId"] as? String,
+                    movieId = (m["movieId"] as? Number)?.toInt(),
+                    createdAt = (m["createdAt"] as? Number)?.toLong() ?: 0L,
+                    seen = (m["seen"] as? Boolean) ?: false
+                )
+            }
         }
     }
 
     suspend fun markSeen(notificationId: String) {
-        val uid = authRepository.currentUser?.uid
+        val uid = authRepository.currentUser?.uid 
             ?: throw IllegalStateException("Usuario no autenticado")
         ds.markNotificationSeen(uid, notificationId)
     }
 
     suspend fun markAllSeen() {
-        val uid = authRepository.currentUser?.uid
+        val uid = authRepository.currentUser?.uid 
             ?: throw IllegalStateException("Usuario no autenticado")
         ds.markAllNotificationsSeen(uid)
     }
