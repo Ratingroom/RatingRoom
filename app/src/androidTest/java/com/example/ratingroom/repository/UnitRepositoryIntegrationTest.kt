@@ -219,10 +219,9 @@ class UserRepositoryIntegrationTest {
 
             newFollowers.forEach { linkFollower(TEST_UID, it) }
 
-            // acto
-            val result = friendsRepo.getFollowers()
-            assertThat(result.isSuccess).isTrue()
-            val list = result.getOrNull()!!
+            //acto
+            val list = friendsRepo.getFollowers()
+            assertThat(list).isNotNull()
             assertThat(list.size).isAtLeast(3)
         }
     }
@@ -247,9 +246,8 @@ class UserRepositoryIntegrationTest {
                 createdFollowingLinks += TEST_UID to it
             }
 
-            val result = friendsRepo.getFollowing()
-            assertThat(result.isSuccess).isTrue()
-            val list = result.getOrNull()!!
+            val list = friendsRepo.getFollowing()
+            assertThat(list).isNotNull()
             assertThat(list.size).isAtLeast(2)
         }
     }
@@ -298,8 +296,9 @@ class UserRepositoryIntegrationTest {
 
             val res = reviewRepo.getReviewsByMovie(777 + idx)
             assertThat(res.isSuccess).isTrue()
-            val list = res.getOrNull()!!
-            assertThat(list.size).isEqualTo(3)
+            val list = res.getOrNull()
+            assertThat(list).isNotNull()
+            assertThat(list!!.size).isEqualTo(3)
         }
     }
 

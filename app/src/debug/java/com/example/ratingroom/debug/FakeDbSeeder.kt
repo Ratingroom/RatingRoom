@@ -19,6 +19,7 @@ import kotlin.random.Random
 object FakeDbSeeder {
     private const val SEED_MARK = "seed_debug_v1"
 
+    @JvmStatic
     fun run(firestore: FirebaseFirestore) {
         CoroutineScope(Dispatchers.IO).launch {
             try {

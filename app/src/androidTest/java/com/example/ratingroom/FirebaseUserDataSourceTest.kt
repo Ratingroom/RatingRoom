@@ -112,8 +112,8 @@ class FirebaseUserDataSourceTest {
                 val uid = uniqueId("user_get")
                 db.collection("users").document(uid).set(userDoc(3)).await()
                 val u = dataSource.getUserProfileById(uid)
-                assertThat(u?.displayName).isEqualTo("Name 3")
-                assertThat(u?.username).isEqualTo("user_3")
+                assertThat(u?.get("displayName")).isEqualTo("Name 3")
+                assertThat(u?.get("username")).isEqualTo("user_3")
             }
         }
     }
@@ -137,11 +137,10 @@ class FirebaseUserDataSourceTest {
                 val targetId = uniqueId("targetFollow")
                 db.collection("users").document(targetId).set(userDoc(1)).await()
 
-                val ok = dataSource.followUser(targetId)
-                assertThat(ok).isTrue()
+                dataSource.followUser(targetId)
 
                 val followers = dataSource.getFollowers(targetId)
-                assertThat(followers.any { it.uid == TEST_UID }).isTrue()
+                assertThat(followers.any { it["uid"] == TEST_UID }).isTrue()
             }
         }
     }
@@ -155,11 +154,10 @@ class FirebaseUserDataSourceTest {
                 db.collection("users").document(targetId).set(userDoc(2)).await()
                 dataSource.followUser(targetId)
 
-                val ok = dataSource.unfollowUser(targetId)
-                assertThat(ok).isTrue()
+                dataSource.unfollowUser(targetId)
 
                 val followers = dataSource.getFollowers(targetId)
-                assertThat(followers.any { it.uid == TEST_UID }).isFalse()
+                assertThat(followers.any { it["uid"] == TEST_UID }).isFalse()
             }
         }
     }
@@ -194,7 +192,7 @@ class FirebaseUserDataSourceTest {
                 }
                 val list = dataSource.getReviewsByMovie(movieId)
                 assertThat(list.size).isEqualTo(5)
-                assertThat(list.map { it.pelicula_id }.toSet()).containsExactly(movieId)
+                assertThat(list.map { (it["movieId"] as? Number)?.toInt() }.toSet()).containsExactly(movieId)
             }
         }
     }
