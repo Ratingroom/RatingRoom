@@ -18,7 +18,7 @@ data class MainMenuUIState(
     val usePagination: Boolean = true,
     val currentPage: Int = 0,
     val hasMorePages: Boolean = true,
-    val pageSize: Int = 10  // 🎯 Cambiado de 6 a 10 películas por página
+    val pageSize: Int = 10
 )
 
 

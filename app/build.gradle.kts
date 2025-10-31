@@ -142,6 +142,9 @@ dependencies {
     // Coroutines test
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
 
+    // Architecture Components testing
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
+
     // Alternativa a los asserts tradicionales
     testImplementation("com.google.truth:truth:1.4.2")
     androidTestImplementation("com.google.truth:truth:1.1.5")

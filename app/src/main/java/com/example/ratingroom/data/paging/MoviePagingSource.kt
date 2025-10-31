@@ -21,7 +21,7 @@ class MoviePagingSource(
 
     override suspend fun load(params: LoadParams<DocumentSnapshot>): LoadResult<DocumentSnapshot, Movie> {
         return try {
-            Log.d(TAG, "🔄 Cargando página, key: ${params.key?.id}")
+            Log.d(TAG, " Cargando página, key: ${params.key?.id}")
             
             // Construir query base
             var query: Query = firestore.collection("movies")
@@ -42,7 +42,7 @@ class MoviePagingSource(
             
             // Ejecutar query
             val querySnapshot: QuerySnapshot = query.get().await()
-            Log.d(TAG, "📦 Recibidos ${querySnapshot.documents.size} documentos")
+            Log.d(TAG, " Recibidos ${querySnapshot.documents.size} documentos")
             
             // Mapear documentos a películas
             val movies = querySnapshot.documents.mapNotNull { doc ->
@@ -65,7 +65,7 @@ class MoviePagingSource(
                 movies
             }
             
-            Log.d(TAG, "✅ Mapeadas ${filteredMovies.size} películas")
+            Log.d(TAG, " Mapeadas ${filteredMovies.size} películas")
             
             // Determinar la clave para la siguiente página
             val nextKey = if (querySnapshot.documents.size < pageSize) {
@@ -81,7 +81,7 @@ class MoviePagingSource(
             )
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error cargando películas: ${e.message}", e)
+            Log.e(TAG, " Error cargando películas: ${e.message}", e)
             LoadResult.Error(e)
         }
     }
