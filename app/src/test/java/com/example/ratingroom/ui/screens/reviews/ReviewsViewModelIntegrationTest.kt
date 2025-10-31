@@ -6,6 +6,10 @@ import com.example.ratingroom.repository.AuthRepository
 import com.example.ratingroom.repository.MovieRepository
 import com.example.ratingroom.repository.ReviewRepository
 import com.google.common.truth.Truth.assertThat
+import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.firestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -30,6 +34,23 @@ class ReviewsViewModelIntegrationTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        
+        // Configurar conexión con emuladores de Firebase para pruebas de integración reales
+        try {
+            // Inicializar Firebase si no está inicializado
+            if (FirebaseApp.getApps().isEmpty()) {
+                FirebaseApp.initializeApp()
+            }
+            
+            // Conectar a emuladores de Firebase
+            Firebase.firestore.useEmulator("10.0.2.2", 8080)
+            Firebase.auth.useEmulator("10.0.2.2", 9099)
+            
+            println("ReviewsViewModelIntegrationTest: Conectado a emuladores de Firebase")
+        } catch (e: Exception) {
+            println("ReviewsViewModelIntegrationTest: Error conectando a emuladores: ${e.message}")
+            // Si no se puede conectar a emuladores, usar implementaciones de prueba
+        }
         
         // Para estas pruebas de integración, creamos implementaciones que simulen
         // el comportamiento real pero de manera controlada y predecible
