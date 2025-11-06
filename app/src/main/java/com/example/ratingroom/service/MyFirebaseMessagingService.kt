@@ -40,28 +40,22 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         private const val CHANNEL_NAME = "RatingRoom Notifications"
     }
 
-    /**
-     * 🔔 Se llama cuando llega una notificación mientras la app está en FOREGROUND
-     */
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
 
-        Log.d(TAG, "📩 Mensaje recibido de: ${message.from}")
+        Log.d(TAG, "Mensaje recibido de: ${message.from}")
 
-        // Datos personalizados
-        message.data.let { data ->
-            Log.d(TAG, "📦 Payload data: $data")
-            val type = data["type"] ?: "default"
-            val title = data["title"] ?: "RatingRoom"
-            val body = data["body"] ?: ""
-            val relatedItemId = data["relatedItemId"] ?: ""
+        if (message.data.isNotEmpty()) {
+            val type = message.data["type"] ?: "default"
+            val title = message.data["title"] ?: message.notification?.title ?: "RatingRoom"
+            val body = message.data["body"] ?: message.notification?.body ?: ""
+            val relatedItemId = message.data["relatedItemId"] ?: ""
 
             showNotification(title, body, type, relatedItemId)
+            return
         }
 
-        // Notificación visual (si viene del servidor)
         message.notification?.let { notification ->
-            Log.d(TAG, "💬 Notification: ${notification.title} - ${notification.body}")
             showNotification(
                 title = notification.title ?: "RatingRoom",
                 message = notification.body ?: "",
@@ -71,20 +65,12 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         }
     }
 
-    /**
-     * 🆕 Se llama cuando se genera o actualiza el token FCM
-     */
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        Log.d(TAG, "🔑 Nuevo FCM Token: $token")
-
-        // Guardar el token en Firestore para el usuario actual
+        Log.d(TAG, "Nuevo FCM Token: $token")
         saveTokenToFirestore(token)
     }
 
-    /**
-     * 💾 Guarda el token FCM en Firestore
-     */
     private fun saveTokenToFirestore(token: String) {
         serviceScope.launch {
             try {
@@ -95,19 +81,16 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                         .update("fcmToken", token)
                         .await()
 
-                    Log.d(TAG, "✅ Token FCM guardado en Firestore para usuario: $userId")
+                    Log.d(TAG, "Token FCM guardado en Firestore para usuario: $userId")
                 } else {
-                    Log.w(TAG, "⚠️ Usuario no autenticado, no se puede guardar token")
+                    Log.w(TAG, "Usuario no autenticado, no se puede guardar token")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Error guardando token FCM: ${e.message}", e)
+                Log.e(TAG, "Error guardando token FCM: ${e.message}", e)
             }
         }
     }
 
-    /**
-     * 🔔 Muestra una notificación local
-     */
     private fun showNotification(
         title: String,
         message: String,
@@ -115,46 +98,59 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         relatedItemId: String
     ) {
         val intent = Intent(this, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             putExtra("notification_type", type)
             putExtra("related_item_id", relatedItemId)
         }
 
         val pendingIntent = PendingIntent.getActivity(
             this,
-            0,
+            System.currentTimeMillis().toInt(),
             intent,
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
+        createNotificationChannel()
+
         val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.logoratingroom) // Asegúrate de tener este icono
+            .setSmallIcon(R.drawable.logoratingroom)
             .setContentTitle(title)
             .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setAutoCancel(true)
             .setSound(defaultSoundUri)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVibrate(longArrayOf(0, 500, 200, 500))
+            .setCategory(NotificationCompat.CATEGORY_SOCIAL)
 
         val notificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Crear canal para Android O+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Notificaciones de seguidores, likes y comentarios"
-                enableLights(true)
-                enableVibration(true)
-            }
-            notificationManager.createNotificationChannel(channel)
-        }
+        val notificationId = System.currentTimeMillis().toInt()
+        notificationManager.notify(notificationId, notificationBuilder.build())
+    }
 
-        notificationManager.notify(System.currentTimeMillis().toInt(), notificationBuilder.build())
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            if (notificationManager.getNotificationChannel(CHANNEL_ID) == null) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    CHANNEL_NAME,
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Notificaciones de seguidores, likes y comentarios"
+                    enableLights(true)
+                    enableVibration(true)
+                    setShowBadge(true)
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+        }
     }
 }

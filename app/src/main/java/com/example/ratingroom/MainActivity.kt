@@ -1,9 +1,15 @@
 package com.example.ratingroom
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -17,7 +23,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -47,10 +55,29 @@ import com.example.ratingroom.ui.theme.RatingRoomTheme
 import com.example.ratingroom.ui.utils.GradientBackground
 import com.example.ratingroom.ui.utils.ModernNavigationDrawer
 import com.example.ratingroom.ui.utils.ModernTopBar
+import com.example.ratingroom.utils.FCMTokenManager
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var fcmTokenManager: FCMTokenManager
+
+    private val requestNotificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            refreshFCMToken()
+        }
+    }
+
+    companion object {
+        private const val TAG = "MainActivity"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -58,9 +85,14 @@ class MainActivity : ComponentActivity() {
         // Estado de autenticación pasado desde SplashActivity
         val isUserLoggedIn = intent.getBooleanExtra(SplashActivity.EXTRA_IS_USER_LOGGED_IN, false)
 
+        requestNotificationPermissionIfNeeded()
+
         setContent {
             RatingRoomTheme {
-                RatingRoomApp(isUserLoggedIn = isUserLoggedIn)
+                RatingRoomApp(
+                    isUserLoggedIn = isUserLoggedIn,
+                    notificationData = getNotificationData(intent)
+                )
             }
         }
 
@@ -79,11 +111,67 @@ class MainActivity : ComponentActivity() {
             android.util.Log.d("MainActivity", "ℹ️ Seeder de datos deshabilitado (ENABLE_TEST_DATA_SEEDER=${BuildConfig.ENABLE_TEST_DATA_SEEDER})")
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            when {
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED -> {
+                    refreshFCMToken()
+                }
+                else -> {
+                    requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        } else {
+            refreshFCMToken()
+        }
+    }
+
+    private fun refreshFCMToken() {
+        lifecycleScope.launch {
+            try {
+                fcmTokenManager.refreshFCMToken()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al actualizar token FCM: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun getNotificationData(intent: Intent?): NotificationData? {
+        intent ?: return null
+        val type = intent.getStringExtra("notification_type") ?: return null
+        val relatedItemId = intent.getStringExtra("related_item_id") ?: return null
+        
+        return NotificationData(type, relatedItemId)
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        val notificationData = getNotificationData(intent)
+        if (notificationData != null) {
+        }
+    }
 }
+
+data class NotificationData(
+    val type: String,
+    val relatedItemId: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
+fun RatingRoomApp(
+    isUserLoggedIn: Boolean = false,
+    notificationData: NotificationData? = null
+) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -99,7 +187,21 @@ fun RatingRoomApp(isUserLoggedIn: Boolean = false) {
     // ✅ Estado de autenticación reactivo
     var currentAuthState by remember { mutableStateOf(isUserLoggedIn) }
 
-    // Recargar perfil al salir de pantallas de auth
+    LaunchedEffect(notificationData) {
+        if (notificationData != null && currentAuthState) {
+            when (notificationData.type) {
+                "follow" -> {
+                    if (notificationData.relatedItemId.isNotEmpty()) {
+                        navController.navigate(Screen.Friend.createRoute(notificationData.relatedItemId))
+                    }
+                }
+                "like" -> {
+                    navController.navigate(Screen.Reviews.route)
+                }
+            }
+        }
+    }
+
     LaunchedEffect(currentRoute) {
         if (
             currentRoute != Screen.Login.route &&
