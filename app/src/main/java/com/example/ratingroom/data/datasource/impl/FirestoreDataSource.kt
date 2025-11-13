@@ -460,4 +460,72 @@ class FirestoreDataSourceImpl @Inject constructor(
             emptyList()
         }
     }
+
+    // ---------------- FAVORITOS DE PELÍCULAS ----------------
+    // ✅ Toggle favorito en película (similar a likes en reviews)
+    override suspend fun toggleMovieFavorite(movieId: Int, userId: String): Boolean {
+        val movieRef = firestoreService.collection("movies").document(movieId.toString())
+        val movieSnap = movieRef.get().await()
+        if (!movieSnap.exists()) throw IllegalStateException("Película no encontrada: $movieId")
+
+        // Subcolección de favoritos en la película: movies/{movieId}/favorites/{userId}
+        val favoriteDocRef = movieRef.collection("favorites").document(userId)
+        // Espejo en el usuario: users/{userId}/favoriteMovies/{movieId}
+        val mirrorFavoriteRef = firestoreService.collection("users")
+            .document(userId).collection("favoriteMovies").document(movieId.toString())
+
+        val adding = firestoreService.runTransaction { tx ->
+            val favoriteDoc = tx.get(favoriteDocRef)
+            val addingLocal = !favoriteDoc.exists()
+            val movieData = tx.get(movieRef).data ?: emptyMap()
+            val currentFavorites = (movieData["favoritesCount"] as? Number)?.toInt() ?: 0
+            val newCount = if (addingLocal) currentFavorites + 1 else maxOf(currentFavorites - 1, 0)
+
+            if (addingLocal) {
+                // Agregar a favoritos
+                tx.set(favoriteDocRef, mapOf("timestamp" to FieldValue.serverTimestamp()))
+                tx.set(mirrorFavoriteRef, mapOf("timestamp" to FieldValue.serverTimestamp()))
+            } else {
+                // Quitar de favoritos
+                tx.delete(favoriteDocRef)
+                tx.delete(mirrorFavoriteRef)
+            }
+
+            // Actualizar contador en el documento de la película
+            val update = mapOf("favoritesCount" to newCount)
+            tx.set(movieRef, update, SetOptions.merge())
+
+            addingLocal
+        }.await()
+
+        return adding
+    }
+
+    override suspend fun isMovieFavoriteByUser(movieId: Int, userId: String): Boolean {
+        return try {
+            val favoriteDoc = firestoreService.collection("movies")
+                .document(movieId.toString())
+                .collection("favorites")
+                .document(userId)
+                .get()
+                .await()
+            favoriteDoc.exists()
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error isMovieFavoriteByUser: ${e.message}", e)
+            false
+        }
+    }
+
+    override suspend fun getFavoriteMoviesCount(movieId: Int): Int {
+        return try {
+            val movieDoc = firestoreService.collection("movies")
+                .document(movieId.toString())
+                .get()
+                .await()
+            (movieDoc.data?.get("favoritesCount") as? Number)?.toInt() ?: 0
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getFavoriteMoviesCount: ${e.message}", e)
+            0
+        }
+    }
 }

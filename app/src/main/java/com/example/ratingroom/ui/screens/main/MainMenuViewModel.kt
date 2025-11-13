@@ -19,7 +19,8 @@ import kotlinx.coroutines.tasks.await
 @HiltViewModel
 class MainMenuViewModel @Inject constructor(
     private val movieRepository: MovieRepository,
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val authRepository: com.example.ratingroom.repository.AuthRepository
 ) : ViewModel() {
 
     private val TAG = "MainMenuViewModel"
@@ -235,7 +236,30 @@ class MainMenuViewModel @Inject constructor(
             description = data["description"] as? String ?: data["descripcion"] as? String ?: "",
             director = data["director"] as? String ?: "",
             duration = data["duration"] as? String ?: "",
-            imageUrl = data["imageUrl"] as? String ?: data["portada"] as? String
+            imageUrl = data["imageUrl"] as? String ?: data["portada"] as? String,
+            favoritesCount = (data["favoritesCount"] as? Number)?.toInt() ?: 0
         )
     }
+
+    fun toggleMovieFavorite(movieId: Int) {
+        viewModelScope.launch {
+            try {
+                val userId = getCurrentUserId()
+                if (userId == "anonymous") {
+                    _uiState.value = _uiState.value.copy(errorMessage = "Debes iniciar sesión para agregar favoritos")
+                    return@launch
+                }
+                
+                val result = movieRepository.toggleMovieFavorite(movieId, userId)
+                if (result.isSuccess) {
+                    // Recargar la página actual para reflejar el cambio
+                    refresh()
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
+            }
+        }
+    }
+
+    fun getCurrentUserId(): String = authRepository.currentUser?.uid ?: "anonymous"
 }

@@ -38,6 +38,7 @@ fun ListScreen(
         uiState = uiState,
         onTabSelected = viewModel::onTabSelected,
         onMovieClick = onMovieClick,
+        onFavoriteClick = { movie -> viewModel.toggleMovieFavorite(movie.id) },
         modifier = modifier
     )
 }
@@ -48,6 +49,7 @@ fun ListScreenContent(
     uiState: ListUIState,
     onTabSelected: (Int) -> Unit,
     onMovieClick: (Int) -> Unit,
+    onFavoriteClick: (Movie) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     
@@ -101,7 +103,8 @@ fun ListScreenContent(
                         if (uiState.watchLaterMovies.isNotEmpty()) {
                             MovieList(
                                 items = uiState.watchLaterMovies,
-                                onMovieClick = onMovieClick
+                                onMovieClick = onMovieClick,
+                                onFavoriteClick = onFavoriteClick
                             )
                         } else {
                             EmptyTabContent(tabIndex = 0, modifier = Modifier.fillMaxSize())
@@ -111,7 +114,8 @@ fun ListScreenContent(
                         if (uiState.favoriteMovies.isNotEmpty()) {
                             MovieList(
                                 items = uiState.favoriteMovies,
-                                onMovieClick = onMovieClick
+                                onMovieClick = onMovieClick,
+                                onFavoriteClick = onFavoriteClick
                             )
                         } else {
                             EmptyTabContent(tabIndex = 1, modifier = Modifier.fillMaxSize())
@@ -121,7 +125,8 @@ fun ListScreenContent(
                         if (uiState.watchedMovies.isNotEmpty()) {
                             MovieList(
                                 items = uiState.watchedMovies,
-                                onMovieClick = onMovieClick
+                                onMovieClick = onMovieClick,
+                                onFavoriteClick = onFavoriteClick
                             )
                         } else {
                             EmptyTabContent(tabIndex = 2, modifier = Modifier.fillMaxSize())
@@ -195,8 +200,9 @@ fun ListTabRow(
 
 @Composable
 fun MovieList(
-    items: List<Movie>, 
+    items: List<Movie>,
     onMovieClick: (Int) -> Unit,
+    onFavoriteClick: (Movie) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -206,13 +212,12 @@ fun MovieList(
         items(items) { movie ->
             MovieCard(
                 movie = movie, 
-                onClick = { onMovieClick(movie.id) }
+                onClick = { onMovieClick(movie.id) },
+                onFavoriteClick = onFavoriteClick
             )
         }
     }
-}
-
-@Composable
+}@Composable
 fun EmptyTabContent(tabIndex: Int, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
     val message = when (tabIndex) {

@@ -40,6 +40,7 @@ fun MainMenuScreen(
         onMovieClick = onMovieClick,
         onNextPage = viewModel::nextPage,
         onPreviousPage = viewModel::previousPage,
+        onFavoriteClick = { movie -> viewModel.toggleMovieFavorite(movie.id) },
         modifier = modifier
     )
 }
@@ -53,6 +54,7 @@ fun MainMenuScreenContent(
     onMovieClick: (Int) -> Unit,
     onNextPage: () -> Unit,
     onPreviousPage: () -> Unit,
+    onFavoriteClick: (Movie) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
@@ -170,7 +172,8 @@ fun MainMenuScreenContent(
                                 items(uiState.filteredMovies) { movie ->
                                     MovieCard(
                                         movie = movie,
-                                        onClick = { onMovieClick(movie.id) }
+                                        onClick = { onMovieClick(movie.id) },
+                                        onFavoriteClick = onFavoriteClick
                                     )
                                 }
                             }

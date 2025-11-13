@@ -351,4 +351,17 @@ class MovieRepository @Inject constructor(
     suspend fun getWatchLaterMovies(): List<Movie> = getAllMovies().take(2)
     suspend fun getFavoriteMovies(): List<Movie> = getAllMovies().filter { it.rating >= 4.7 }
     suspend fun getWatchedMovies(): List<Movie> = getAllMovies().takeLast(3)
+
+    // ---------- Favoritos de películas ----------
+    suspend fun toggleMovieFavorite(movieId: Int, userId: String): Result<Boolean> {
+        return firebaseRepository.toggleMovieFavorite(movieId, userId)
+    }
+
+    suspend fun isMovieFavoriteByUser(movieId: Int, userId: String): Result<Boolean> {
+        return firebaseRepository.isMovieFavoriteByUser(movieId, userId)
+    }
+
+    suspend fun getFavoriteMoviesCount(movieId: Int): Result<Int> {
+        return firebaseRepository.getFavoriteMoviesCount(movieId)
+    }
 }
