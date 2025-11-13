@@ -138,6 +138,25 @@ class MovieFirebaseRepository @Inject constructor(
     suspend fun getFavoriteMovies(): List<Movie> = getAllMovies().getOrNull()?.filter { it.rating >= 4.7 } ?: emptyList()
     suspend fun getWatchedMovies(): List<Movie> = getAllMovies().getOrNull()?.takeLast(3) ?: emptyList()
 
+    suspend fun getUserFavoriteMovies(userId: String): Result<List<Movie>> {
+        return try {
+            val firestoreMovies = firestoreDataSource.getUserFavoriteMovies(userId)
+            val movies = firestoreMovies.mapNotNull { data ->
+                try {
+                    val movieDto = mapFromFirestoreData(data)
+                    mapMovieFromFirestore(movieDto)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error mapeando película favorita desde Firebase: ${e.message}", e)
+                    null
+                }
+            }
+            Result.success(movies)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getUserFavoriteMovies: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
     // ---------- Favoritos de películas ----------
     suspend fun toggleMovieFavorite(movieId: Int, userId: String): Result<Boolean> {
         return try {

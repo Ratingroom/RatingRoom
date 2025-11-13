@@ -528,4 +528,41 @@ class FirestoreDataSourceImpl @Inject constructor(
             0
         }
     }
+
+    override suspend fun getUserFavoriteMovies(userId: String): List<Map<String, Any>> {
+        return try {
+            // Obtener los IDs de películas favoritas del usuario
+            val favoritesSnap = firestoreService.collection("users")
+                .document(userId)
+                .collection("favoriteMovies")
+                .get()
+                .await()
+            
+            val movieIds = favoritesSnap.documents.map { it.id }
+            
+            // Obtener los datos completos de cada película
+            val movies = movieIds.mapNotNull { movieId ->
+                try {
+                    val movieDoc = firestoreService.collection("movies")
+                        .document(movieId)
+                        .get()
+                        .await()
+                    
+                    if (movieDoc.exists()) {
+                        movieDoc.data?.toMutableMap()?.apply {
+                            if (this["id"] == null) this["id"] = movieId.toIntOrNull() ?: 0
+                        }
+                    } else null
+                } catch (e: Exception) {
+                    Log.e("Firestore", "Error obteniendo película $movieId: ${e.message}", e)
+                    null
+                }
+            }
+            
+            movies
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getUserFavoriteMovies: ${e.message}", e)
+            emptyList()
+        }
+    }
 }

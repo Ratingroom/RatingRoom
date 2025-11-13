@@ -64,4 +64,5 @@ interface FirestoreDataSource {
     suspend fun toggleMovieFavorite(movieId: Int, userId: String): Boolean
     suspend fun isMovieFavoriteByUser(movieId: Int, userId: String): Boolean
     suspend fun getFavoriteMoviesCount(movieId: Int): Int
+    suspend fun getUserFavoriteMovies(userId: String): List<Map<String, Any>>
 }
