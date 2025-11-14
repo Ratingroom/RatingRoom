@@ -91,15 +91,17 @@ class MainMenuViewModel @Inject constructor(
                 val querySnapshot = query.get().await()
                 Log.d(TAG, "📦 Recibidos ${querySnapshot.documents.size} documentos")
                 
-                // Mapear documentos a películas
-                val movies = querySnapshot.documents.mapNotNull { doc ->
-                    try {
-                        mapDocumentToMovie(doc)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error mapeando documento ${doc.id}: ${e.message}", e)
-                        null
+                // Mapear documentos a películas (en paralelo para mejor rendimiento)
+                val movies = querySnapshot.documents.map { doc ->
+                    async {
+                        try {
+                            mapDocumentToMovie(doc)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error mapeando documento ${doc.id}: ${e.message}", e)
+                            null
+                        }
                     }
-                }
+                }.mapNotNull { it.await() }
                 
                 // Aplicar filtro de búsqueda en memoria si existe
                 val filteredMovies = if (state.searchQuery.isNotBlank()) {
@@ -112,6 +114,12 @@ class MainMenuViewModel @Inject constructor(
                     movies
                 }
                 
+                // Ordenar: películas destacadas primero, luego por título
+                val sortedMovies = filteredMovies.sortedWith(
+                    compareByDescending<Movie> { it.isFeatured }
+                        .thenBy { it.title }
+                )
+                
                 // Actualizar cursores
                 if (querySnapshot.documents.isNotEmpty()) {
                     firstDocument = querySnapshot.documents.firstOrNull()
@@ -123,13 +131,14 @@ class MainMenuViewModel @Inject constructor(
                 
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    movies = filteredMovies,
-                    filteredMovies = filteredMovies,
+                    movies = sortedMovies,
+                    filteredMovies = sortedMovies,
                     hasMorePages = hasMore,
-                    errorMessage = if (filteredMovies.isEmpty()) "No hay películas disponibles" else null
+                    errorMessage = if (sortedMovies.isEmpty()) "No hay películas disponibles" else null
                 )
                 
-                Log.d(TAG, "✅ Cargadas ${filteredMovies.size} películas, hay más: $hasMore")
+                Log.d(TAG, "✅ Cargadas ${sortedMovies.size} películas, hay más: $hasMore")
+                Log.d(TAG, "⭐ Películas destacadas: ${sortedMovies.count { it.isFeatured }}")
                 
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Error cargando películas: ${e.message}", e)
@@ -221,8 +230,13 @@ class MainMenuViewModel @Inject constructor(
         loadMoviesPage()
     }
     
-    private fun mapDocumentToMovie(doc: DocumentSnapshot): Movie {
+    private suspend fun mapDocumentToMovie(doc: DocumentSnapshot): Movie {
         val data = doc.data ?: throw IllegalStateException("Documento sin datos")
+        
+        val favoritesCount = (data["favoritesCount"] as? Number)?.toInt() ?: 0
+        
+        // Calcular si es destacada (en paralelo para eficiencia)
+        val isFeatured = calculateIfFeatured(favoritesCount)
         
         return Movie(
             id = (data["id"] as? Number)?.toInt() ?: doc.id.toIntOrNull() ?: 0,
@@ -237,8 +251,37 @@ class MainMenuViewModel @Inject constructor(
             director = data["director"] as? String ?: "",
             duration = data["duration"] as? String ?: "",
             imageUrl = data["imageUrl"] as? String ?: data["portada"] as? String,
-            favoritesCount = (data["favoritesCount"] as? Number)?.toInt() ?: 0
+            favoritesCount = favoritesCount,
+            isFeatured = isFeatured
         )
+    }
+
+    /**
+     * Calcula si una película es destacada basándose en su número de favoritos.
+     * Una película es destacada si tiene el mayor número de favoritos (>= 1).
+     * En caso de empate, todas las películas empatadas son destacadas.
+     */
+    private suspend fun calculateIfFeatured(favoritesCount: Int): Boolean {
+        // Si no tiene favoritos, definitivamente no es destacada
+        if (favoritesCount < 1) return false
+        
+        return try {
+            // Buscar el máximo número de favoritos en toda la colección
+            val maxFavoritesSnapshot = firestore.collection("movies")
+                .orderBy("favoritesCount", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(1)
+                .get()
+                .await()
+            
+            val maxFavorites = maxFavoritesSnapshot.documents.firstOrNull()
+                ?.get("favoritesCount") as? Number
+            
+            // Es destacada si tiene el máximo número de favoritos
+            maxFavorites?.toInt() == favoritesCount
+        } catch (e: Exception) {
+            Log.e(TAG, "Error calculando película destacada: ${e.message}", e)
+            false
+        }
     }
 
     fun toggleMovieFavorite(movieId: Int) {

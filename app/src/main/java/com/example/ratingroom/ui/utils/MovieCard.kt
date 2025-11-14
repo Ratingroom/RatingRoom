@@ -84,6 +84,19 @@ fun MovieCard(
                             MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+
+                // Estrella de película destacada (esquina inferior derecha)
+                if (movie.isFeatured) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = "Película destacada",
+                        tint = MaterialTheme.colorScheme.tertiary, // Color amarillo del tema
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .size(24.dp)
+                    )
+                }
             }
 
             Spacer(Modifier.height(12.dp))
