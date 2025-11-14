@@ -11,5 +11,6 @@ interface AuthRemoteDataSource {
     suspend fun updateUserEmail(newEmail: String)
     suspend fun updateDisplayName(displayName: String)
     fun signOut()
+    suspend fun clearGoogleCredentials(context: android.content.Context)
     fun isUserLoggedIn(): Boolean
 }

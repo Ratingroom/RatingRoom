@@ -407,13 +407,19 @@ fun RatingRoomApp(
                     currentRoute = currentRoute,
                     onNavigate = { route -> navigateToScreen(route) },
                     onLogout = {
-                        profileViewModel.logout()
-                        // ✅ Actualizar estado de autenticación
-                        currentAuthState = false
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(0) { inclusive = true }
+                        val context = navController.context
+                        
+                        // Esperar a que el logout se complete antes de reiniciar
+                        profileViewModel.logout(context) {
+                            currentAuthState = false
+                            
+                            // Reiniciar la Activity completamente para limpiar TODOS los ViewModels
+                            val intent = Intent(context, SplashActivity::class.java)
+                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            context.startActivity(intent)
+                            
+                            mainViewModel.updateDrawerState(false)
                         }
-                        mainViewModel.updateDrawerState(false)
                     },
                     profileData = profileUiState.profileData
                 )

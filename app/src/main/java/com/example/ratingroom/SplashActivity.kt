@@ -64,11 +64,7 @@ class SplashActivity : ComponentActivity() {
     }
     
     private fun checkAuthAndNavigate() {
-        //forzar para rest api
-        //authRepository.signOut()
-        //val isUserLoggedIn = authRepository.isUserLoggedIn()
-        //val isUserLoggedIn = true
-        // ✅ Verificar si el usuario ya está autenticado en Firebase
+        // Verificar si el usuario ya está autenticado en Firebase
         val isUserLoggedIn = authRepository.isUserLoggedIn()
         
         val intent = Intent(this, MainActivity::class.java).apply {

@@ -74,6 +74,17 @@ class AuthRemoteDataSourceImpl @Inject constructor(
         authService.signOut()
     }
 
+    override suspend fun clearGoogleCredentials(context: android.content.Context) {
+        try {
+            val credentialManager = androidx.credentials.CredentialManager.create(context)
+            credentialManager.clearCredentialState(
+                androidx.credentials.ClearCredentialStateRequest()
+            )
+        } catch (e: Exception) {
+            // Silenciar error si no hay credenciales que limpiar
+        }
+    }
+
     override fun isUserLoggedIn(): Boolean {
         return currentUser != null
     }
