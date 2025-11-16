@@ -46,8 +46,9 @@ object DataSourceModule {
     @Provides
     @Singleton
     fun provideMovieRepository(
-        movieFirebaseRepository: MovieFirebaseRepository
+        movieFirebaseRepository: MovieFirebaseRepository,
+        authRepository: com.example.ratingroom.repository.AuthRepository
     ): MovieRepository {
-        return MovieRepository(movieFirebaseRepository)
+        return MovieRepository(movieFirebaseRepository, authRepository)
     }
 }

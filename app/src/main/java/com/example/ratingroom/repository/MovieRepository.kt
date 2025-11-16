@@ -18,7 +18,8 @@ import javax.inject.Singleton
 
 @Singleton
 class MovieRepository @Inject constructor(
-    private val firebaseRepository: MovieFirebaseRepository
+    private val firebaseRepository: MovieFirebaseRepository,
+    private val authRepository: AuthRepository
 ) {
 
     private val TAG = "MovieRepo"
@@ -349,6 +350,29 @@ class MovieRepository @Inject constructor(
 
     // helpers UI
     suspend fun getWatchLaterMovies(): List<Movie> = getAllMovies().take(2)
-    suspend fun getFavoriteMovies(): List<Movie> = getAllMovies().filter { it.rating >= 4.7 }
     suspend fun getWatchedMovies(): List<Movie> = getAllMovies().takeLast(3)
+
+    // ✅ Obtener películas favoritas del usuario autenticado desde Firebase
+    suspend fun getFavoriteMovies(): List<Movie> {
+        val userId = authRepository.currentUser?.uid
+        return if (userId != null) {
+            firebaseRepository.getUserFavoriteMovies(userId).getOrNull() ?: emptyList()
+        } else {
+            // Si no hay usuario autenticado, devolver lista vacía
+            emptyList()
+        }
+    }
+
+    // ---------- Favoritos de películas ----------
+    suspend fun toggleMovieFavorite(movieId: Int, userId: String): Result<Boolean> {
+        return firebaseRepository.toggleMovieFavorite(movieId, userId)
+    }
+
+    suspend fun isMovieFavoriteByUser(movieId: Int, userId: String): Result<Boolean> {
+        return firebaseRepository.isMovieFavoriteByUser(movieId, userId)
+    }
+
+    suspend fun getFavoriteMoviesCount(movieId: Int): Result<Int> {
+        return firebaseRepository.getFavoriteMoviesCount(movieId)
+    }
 }

@@ -236,11 +236,30 @@ class ProfileViewModel @Inject constructor(
     private fun currentUserIdForUi(): Int =
         authRepository.currentUser?.uid?.hashCode() ?: 0
 
-    fun logout() {
+    fun logout(context: android.content.Context, onComplete: () -> Unit) {
         clearFollowListeners()
         viewModelScope.launch {
-            authRepository.signOut()
+            try {
+                authRepository.signOut(context)
+                clearAllState()
+                onComplete()
+            } catch (e: Exception) {
+                // Aún así limpiar estado y completar el logout en la UI
+                clearAllState()
+                onComplete()
+            }
         }
+    }
+    
+    /**
+     * Limpia todo el estado del ViewModel al hacer logout
+     */
+    private fun clearAllState() {
+        _uiState.value = ProfileUIState(isLoading = false)
+        _followers.value = emptyList()
+        _following.value = emptyList()
+        _isLoadingFollowers.value = false
+        _isLoadingFollowing.value = false
     }
 
     // ---------- Función en línea: mejora integridad ----------

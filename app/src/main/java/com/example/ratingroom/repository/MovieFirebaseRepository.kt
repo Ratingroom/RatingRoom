@@ -26,7 +26,8 @@ class MovieFirebaseRepository @Inject constructor(
             description = data["description"] as? String ?: data["descripcion"] as? String ?: "",
             director = data["director"] as? String ?: "",
             duration = data["duration"] as? String ?: "",
-            imageUrl = data["imageUrl"] as? String ?: data["portada"] as? String
+            imageUrl = data["imageUrl"] as? String ?: data["portada"] as? String,
+            favoritesCount = (data["favoritesCount"] as? Number)?.toInt() ?: 0
         )
     }
 
@@ -41,7 +42,8 @@ class MovieFirebaseRepository @Inject constructor(
             description = data.description,
             director = data.director,
             duration = data.duration,
-            imageUrl = data.imageUrl
+            imageUrl = data.imageUrl,
+            favoritesCount = data.favoritesCount
         )
     }
 
@@ -135,4 +137,54 @@ class MovieFirebaseRepository @Inject constructor(
     suspend fun getWatchLaterMovies(): List<Movie> = getAllMovies().getOrNull()?.take(2) ?: emptyList()
     suspend fun getFavoriteMovies(): List<Movie> = getAllMovies().getOrNull()?.filter { it.rating >= 4.7 } ?: emptyList()
     suspend fun getWatchedMovies(): List<Movie> = getAllMovies().getOrNull()?.takeLast(3) ?: emptyList()
+
+    suspend fun getUserFavoriteMovies(userId: String): Result<List<Movie>> {
+        return try {
+            val firestoreMovies = firestoreDataSource.getUserFavoriteMovies(userId)
+            val movies = firestoreMovies.mapNotNull { data ->
+                try {
+                    val movieDto = mapFromFirestoreData(data)
+                    mapMovieFromFirestore(movieDto)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error mapeando película favorita desde Firebase: ${e.message}", e)
+                    null
+                }
+            }
+            Result.success(movies)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getUserFavoriteMovies: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    // ---------- Favoritos de películas ----------
+    suspend fun toggleMovieFavorite(movieId: Int, userId: String): Result<Boolean> {
+        return try {
+            val wasFavorited = firestoreDataSource.toggleMovieFavorite(movieId, userId)
+            Result.success(wasFavorited)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error toggleMovieFavorite: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun isMovieFavoriteByUser(movieId: Int, userId: String): Result<Boolean> {
+        return try {
+            val isFavorite = firestoreDataSource.isMovieFavoriteByUser(movieId, userId)
+            Result.success(isFavorite)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error isMovieFavoriteByUser: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getFavoriteMoviesCount(movieId: Int): Result<Int> {
+        return try {
+            val count = firestoreDataSource.getFavoriteMoviesCount(movieId)
+            Result.success(count)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getFavoriteMoviesCount: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
 }

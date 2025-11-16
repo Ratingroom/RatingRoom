@@ -14,7 +14,8 @@ data class MovieDto(
     val rating: Double = 0.0,
     val reviews: Int = 0,
     val director: String = "",
-    val duration: String = ""
+    val duration: String = "",
+    val favoritesCount: Int = 0
 )
 
 data class CreateMovieDto(

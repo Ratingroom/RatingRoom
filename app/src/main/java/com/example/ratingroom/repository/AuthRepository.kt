@@ -266,10 +266,16 @@ class AuthRepository @Inject constructor(
     }
 
     // ---------- Utilidades ----------
-    suspend fun signOut() {
-        // 🗑️ Limpiar token FCM antes de cerrar sesión
+    suspend fun signOut(context: android.content.Context? = null) {
+        // Limpiar token FCM antes de cerrar sesión
         fcmTokenManager.clearFCMToken()
         
+        // Limpiar credenciales de Google del Credential Manager
+        context?.let {
+            authRemoteDataSource.clearGoogleCredentials(it)
+        }
+        
+        // Cerrar sesión en Firebase Auth
         authRemoteDataSource.signOut()
     }
 

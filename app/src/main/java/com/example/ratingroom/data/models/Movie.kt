@@ -11,7 +11,9 @@ data class Movie(
     val director: String,
     val duration: String,
     val imageUrl: String? = null,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val favoritesCount: Int = 0, // Contador de cuántas personas tienen esta película como favorita
+    val isFeatured: Boolean = false // Indica si es una película destacada (mayor número de favoritos)
 )
 
 data class User(

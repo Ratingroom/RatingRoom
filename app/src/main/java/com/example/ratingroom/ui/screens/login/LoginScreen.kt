@@ -3,6 +3,8 @@ package com.example.ratingroom.ui.screens.login
 import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -117,14 +119,19 @@ fun LoginScreenContent(
     val primary = MaterialTheme.colorScheme.primary
 
     GradientBackground {
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            AuthCard {
+        androidx.compose.foundation.rememberScrollState().let { scrollState ->
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                // Spacer para centrar el contenido cuando hay espacio disponible
+                Spacer(modifier = Modifier.weight(1f, fill = false))
+                
+                AuthCard {
                 // Logo
                 Image(
                     painter = painterResource(id = R.drawable.logoratingroom),
@@ -255,13 +262,20 @@ fun LoginScreenContent(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Texto adicional
-                Text(
-                    text = stringResource(id = R.string.login_demo_text),
-                    fontSize = 12.sp,
-                    color = onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
+                    // Texto adicional
+                    Text(
+                        text = stringResource(id = R.string.login_demo_text),
+                        fontSize = 12.sp,
+                        color = onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                
+                // Spacer para centrar el contenido cuando hay espacio disponible
+                Spacer(modifier = Modifier.weight(1f, fill = false))
+                
+                // Spacer mínimo para asegurar padding inferior
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }

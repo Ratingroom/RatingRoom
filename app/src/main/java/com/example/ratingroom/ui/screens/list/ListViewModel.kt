@@ -12,7 +12,8 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class ListViewModel @Inject constructor(
-    private val movieRepository: MovieRepository
+    private val movieRepository: MovieRepository,
+    private val authRepository: com.example.ratingroom.repository.AuthRepository
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(ListUIState())
@@ -53,4 +54,26 @@ class ListViewModel @Inject constructor(
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
+
+    fun toggleMovieFavorite(movieId: Int) {
+        viewModelScope.launch {
+            try {
+                val userId = getCurrentUserId()
+                if (userId == "anonymous") {
+                    _uiState.value = _uiState.value.copy(errorMessage = "Debes iniciar sesión para agregar favoritos")
+                    return@launch
+                }
+                
+                val result = movieRepository.toggleMovieFavorite(movieId, userId)
+                if (result.isSuccess) {
+                    // Recargar las listas para reflejar el cambio
+                    loadLists()
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
+            }
+        }
+    }
+
+    fun getCurrentUserId(): String = authRepository.currentUser?.uid ?: "anonymous"
 }

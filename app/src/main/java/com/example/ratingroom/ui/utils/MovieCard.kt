@@ -84,6 +84,19 @@ fun MovieCard(
                             MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+
+                // Estrella de película destacada (esquina inferior derecha)
+                if (movie.isFeatured) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = "Película destacada",
+                        tint = MaterialTheme.colorScheme.tertiary, // Color amarillo del tema
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .size(24.dp)
+                    )
+                }
             }
 
             Spacer(Modifier.height(12.dp))
@@ -128,6 +141,26 @@ fun MovieCard(
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            // ---------- Contador de favoritos ----------
+            if (movie.favoritesCount > 0) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Favorite,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "${movie.favoritesCount} favoritos",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

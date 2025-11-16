@@ -13,7 +13,8 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class FavoritesViewModel @Inject constructor(
-    private val movieRepository: MovieRepository
+    private val movieRepository: MovieRepository,
+    private val authRepository: com.example.ratingroom.repository.AuthRepository
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(FavoritesUIState())
@@ -45,11 +46,18 @@ class FavoritesViewModel @Inject constructor(
     fun removeFromFavorites(movie: Movie) {
         viewModelScope.launch {
             try {
-                // TODO: Implementar lógica para remover de favoritos en el repositorio
-                val updatedFavorites = _uiState.value.favoriteMovies.filter { it.id != movie.id }
-                _uiState.value = _uiState.value.copy(
-                    favoriteMovies = updatedFavorites
-                )
+                val userId = getCurrentUserId()
+                if (userId == "anonymous") {
+                    _uiState.value = _uiState.value.copy(errorMessage = "Debes iniciar sesión")
+                    return@launch
+                }
+                
+                // Toggle favorito en Firebase (lo quitará porque ya está marcado)
+                val result = movieRepository.toggleMovieFavorite(movie.id, userId)
+                if (result.isSuccess) {
+                    // Recargar la lista de favoritos
+                    loadFavorites()
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     errorMessage = e.message
@@ -61,11 +69,18 @@ class FavoritesViewModel @Inject constructor(
     fun addToFavorites(movie: Movie) {
         viewModelScope.launch {
             try {
-                // TODO: Implementar lógica para agregar a favoritos en el repositorio
-                val updatedFavorites = _uiState.value.favoriteMovies + movie
-                _uiState.value = _uiState.value.copy(
-                    favoriteMovies = updatedFavorites
-                )
+                val userId = getCurrentUserId()
+                if (userId == "anonymous") {
+                    _uiState.value = _uiState.value.copy(errorMessage = "Debes iniciar sesión")
+                    return@launch
+                }
+                
+                // Toggle favorito en Firebase (lo agregará si no está marcado)
+                val result = movieRepository.toggleMovieFavorite(movie.id, userId)
+                if (result.isSuccess) {
+                    // Recargar la lista de favoritos
+                    loadFavorites()
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     errorMessage = e.message
@@ -73,6 +88,8 @@ class FavoritesViewModel @Inject constructor(
             }
         }
     }
+
+    private fun getCurrentUserId(): String = authRepository.currentUser?.uid ?: "anonymous"
     
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
