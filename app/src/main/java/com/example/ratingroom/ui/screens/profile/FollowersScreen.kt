@@ -30,8 +30,8 @@ fun FollowersRoute(
     }
     
     val uiState by viewModel.uiState.collectAsState()
-    val followers = uiState.followers
-    val isLoading = uiState.isLoadingFollowers
+    val followers by viewModel.followers.collectAsState()
+    val isLoading by viewModel.isLoadingFollowers.collectAsState()
     
     FollowersScreen(
         followers = followers,

@@ -71,13 +71,18 @@ class MainMenuViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             try {
                 val state = _uiState.value
-                var query = firestore.collection("movies")
-                    .orderBy("title")
+                
+                // Construir query base como Query (no CollectionReference)
+                var query: com.google.firebase.firestore.Query = firestore.collection("movies")
                 
                 // Aplicar filtro de género si no es "Todos"
                 if (state.selectedGenre != "Todos") {
                     query = query.whereEqualTo("genre", state.selectedGenre)
                 }
+                
+                // Ordenar por ID del documento (siempre disponible y único)
+                // Esto permite la paginación correcta
+                query = query.orderBy(com.google.firebase.firestore.FieldPath.documentId())
                 
                 // Aplicar paginación
                 query = query.limit(state.pageSize.toLong())
@@ -120,7 +125,8 @@ class MainMenuViewModel @Inject constructor(
                         .thenBy { it.title }
                 )
                 
-                // Actualizar cursores
+                // Actualizar cursores basados en el ÚLTIMO documento de Firebase
+                // (no el último según nuestro ordenamiento personalizado)
                 if (querySnapshot.documents.isNotEmpty()) {
                     firstDocument = querySnapshot.documents.firstOrNull()
                     lastDocument = querySnapshot.documents.lastOrNull()

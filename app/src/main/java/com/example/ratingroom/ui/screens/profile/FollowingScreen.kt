@@ -29,8 +29,8 @@ fun FollowingRoute(
     }
     
     val uiState by viewModel.uiState.collectAsState()
-    val following = uiState.following
-    val isLoading = uiState.isLoadingFollowing
+    val following by viewModel.following.collectAsState()
+    val isLoading by viewModel.isLoadingFollowing.collectAsState()
     
     FollowingScreen(
         following = following,
